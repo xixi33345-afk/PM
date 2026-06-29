@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交付管理台 · 项目 / 问题 / 负责人 / 清单</title>
+<style>
+  :root{
+    --bg:#F6F7F9; --surface:#FFFFFF; --ink:#161B26; --muted:#6B7280;
+    --line:#E5E8EE; --brand:#2D5BFF; --brand-weak:#EAF0FF;
+    --risk-high:#E5484D; --risk-mid:#D98A2B; --risk-low:#2F9E6B; --blocked:#7C5CFF;
+    --p0:#E5484D; --p1:#C2710C; --p2:#2D5BFF; --p3:#6B7280;
+    --radius:10px;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;}
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted);}
+  button{font-family:inherit; cursor:pointer;}
+  :focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:6px;}
+
+  /* 左侧可折叠侧边栏布局 */
+  .app{display:flex; min-height:100vh;}
+  .sidebar{width:212px; flex:none; background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; transition:width .18s ease;}
+  .app.collapsed .sidebar{width:60px;}
+  .side-toggle{margin:12px 12px 4px; width:36px; height:32px; border:1px solid var(--line); background:var(--surface); border-radius:8px; color:var(--muted); font-size:15px; cursor:pointer; display:grid; place-items:center; flex:none;}
+  .side-toggle:hover{color:var(--ink); background:var(--bg);}
+  .app.collapsed .side-toggle{margin:12px auto 4px;}
+  .side-brand{display:flex; align-items:center; gap:10px; padding:8px 14px 14px;}
+  .app.collapsed .side-brand{justify-content:center; padding:8px 0 14px;}
+  .brand-mark{width:30px; height:30px; border-radius:8px; background:var(--ink); color:#fff; display:grid; place-items:center; font-weight:700; flex:none; font-size:15px;}
+  .side-brand .name{font-weight:700; font-size:15px; letter-spacing:-.01em; white-space:nowrap;}
+  .app.collapsed .side-brand .name{display:none;}
+  .side-nav{display:flex; flex-direction:column; gap:2px; padding:6px 10px; flex:1; overflow-y:auto;}
+  .nav-item{display:flex; align-items:center; gap:11px; padding:9px 11px; border:none; background:none; border-radius:8px; font-size:14px; font-weight:600; color:var(--muted); cursor:pointer; width:100%; text-align:left; white-space:nowrap;}
+  .nav-item:hover{background:var(--bg); color:var(--ink);}
+  .nav-item.active{background:var(--brand-weak); color:var(--brand);}
+  .nav-item .ic{flex:none; width:18px; height:18px; display:grid; place-items:center;}
+  .nav-item .ic svg{width:18px; height:18px; display:block;}
+  .app.collapsed .nav-item{justify-content:center; padding:9px 0;}
+  .app.collapsed .nav-item .lbl{display:none;}
+  .side-foot{margin-top:auto; padding:14px; border-top:1px solid var(--line); color:var(--muted);}
+  .side-foot .d{font-weight:600; color:var(--ink); font-size:13px;}
+  .app.collapsed .side-foot{display:none;}
+  main.main{flex:1; min-width:0;}
+  .wrap{margin:0; padding:24px 28px;}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;}
+  .tile{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px;}
+  .tile .label{font-size:12px; color:var(--muted); margin-bottom:6px;}
+  .tile .num{font-family:var(--mono); font-size:28px; font-weight:600; letter-spacing:-.02em;}
+  .tile.alert .num{color:var(--risk-high);}
+  .tile.warn .num{color:var(--risk-mid);}
+
+
+  .seg{display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:3px; margin-bottom:16px; flex-wrap:wrap;}
+  .seg button{border:none; background:none; padding:6px 14px; font-size:13px; font-weight:600; color:var(--muted); border-radius:6px;}
+  .seg button.on{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(20,27,38,.08);}
+  .seg.small{margin-left:10px;}
+
+  .client-head{display:flex; align-items:baseline; gap:10px; margin:22px 0 10px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+  .client-head .name{font-weight:700; font-size:15px;}
+  .client-head .roll{font-size:12px; color:var(--muted);}
+
+  .proj-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:10px;}
+  .proj-top{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .proj-name{font-weight:700; font-size:15px; cursor:pointer;}
+  .proj-name:hover{color:var(--brand);}
+  .proj-client{font-size:12px; color:var(--muted); background:var(--bg); padding:2px 8px; border-radius:999px;}
+  .proj-meta{display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--muted); margin-top:10px;}
+  .proj-meta b{color:var(--ink); font-weight:600;}
+
+  .bar{height:7px; background:var(--bg); border-radius:999px; overflow:hidden; flex:1; min-width:120px;}
+  .bar > i{display:block; height:100%; background:var(--brand); border-radius:999px;}
+  .pct{font-family:var(--mono); font-size:12px; color:var(--muted); width:38px; text-align:right;}
+  .progress-wrap{display:flex; align-items:center; gap:10px; margin-top:12px;}
+
+  .chip{font-family:var(--mono); font-size:11px; padding:2px 7px; border-radius:999px; font-weight:600; white-space:nowrap;}
+  .chip.high{background:#FDECEC; color:var(--risk-high);}
+  .chip.mid{background:#FBF1E2; color:var(--risk-mid);}
+  .chip.low{background:#E8F6EF; color:var(--risk-low);}
+  .chip.done{background:#EEF0F4; color:var(--muted);}
+  .chip.blocked{background:#F0EBFF; color:var(--blocked);}
+  .chip.p0{background:#FDECEC; color:var(--p0);}
+  .chip.p1{background:#FBEEDC; color:var(--p1);}
+  .chip.p2{background:#E8F0FE; color:var(--p2);}
+  .chip.p3{background:#EEF0F4; color:var(--p3);}
+  .chip.cat{background:#EEF0F4; color:#374151;}
+  .chip.st{background:#EEF0F4; color:#374151;}
+  .chip.st.fail{background:#FDECEC; color:var(--risk-high);}
+  .chip.st.solved{background:#E8F6EF; color:var(--risk-low);}
+
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; margin-bottom:16px;}
+  .panel h3{margin:0 0 4px; font-size:15px;}
+  .panel .hint{font-size:12px; color:var(--muted); margin-bottom:14px;}
+
+  /* 里程碑时间线 */
+  .ms-toolbar{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; align-items:center;}
+  .proj-block{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; margin-bottom:16px;}
+  .pb-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px;}
+  .timeline{position:relative; margin-left:6px; padding-left:22px; border-left:2px solid var(--line);}
+  .ms{position:relative; padding-bottom:18px;}
+  .ms:last-child{padding-bottom:0;}
+  .ms .dot{position:absolute; left:-29px; top:2px; width:13px; height:13px; border-radius:50%; background:var(--surface); border:2px solid var(--muted);}
+  .ms[data-risk="high"] .dot{border-color:var(--risk-high); background:var(--risk-high);}
+  .ms[data-risk="mid"] .dot{border-color:var(--risk-mid); background:var(--risk-mid);}
+  .ms[data-risk="low"] .dot{border-color:var(--risk-low);}
+  .ms[data-risk="done"] .dot{border-color:var(--risk-low); background:var(--risk-low);}
+  .ms-card{background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px;}
+  .ms[data-risk="high"] .ms-card{border-left:3px solid var(--risk-high);}
+  .ms[data-risk="mid"] .ms-card{border-left:3px solid var(--risk-mid);}
+  .ms[data-risk="low"] .ms-card{border-left:3px solid var(--risk-low);}
+  .ms[data-risk="done"] .ms-card{border-left:3px solid var(--risk-low);}
+  .ms-card-top{display:flex; align-items:center; gap:9px; flex-wrap:wrap;}
+  .ms-badge{font-family:var(--mono); font-size:10px; letter-spacing:.08em; background:var(--ink); color:#fff; padding:2px 7px; border-radius:4px; flex:none;}
+  .ms-name{font-weight:700; font-size:15px;}
+  .ms-deliverable{font-size:13px; color:var(--ink); margin-top:9px;}
+  .ms-deliverable .lab{color:var(--muted);}
+  .ms-meta{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--muted);}
+  .ms-meta b{color:var(--ink); font-weight:600;}
+  .ms-nodes-wrap{margin-top:12px;}
+  .ms-nodes-label{font-size:11px; color:var(--muted); font-family:var(--mono); letter-spacing:.06em; margin:0 0 7px 2px;}
+  .ms-nodes{display:flex; flex-direction:column; gap:6px;}
+
+  /* 甘特图 */
+  .gantt-proj{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; margin-bottom:16px; overflow-x:auto;}
+  .gantt-projhead{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
+  .gantt{min-width:760px;}
+  .g-row{display:grid; grid-template-columns:264px 1fr; align-items:stretch; border-top:1px solid var(--line);}
+  .g-row.g-head{border-top:none;}
+  .g-head .g-label{font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted); display:flex; align-items:center; padding:6px 10px 6px 0;}
+  .g-monthhead{display:flex;}
+  .g-month{flex:1; text-align:center; font-size:11px; color:var(--muted); border-left:1px solid var(--line); padding:5px 0;}
+  .g-label{display:flex; align-items:center; gap:6px; padding:7px 10px 7px 0; min-width:0;}
+  .g-label .g-name{font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .g-label .g-name-sm{font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .g-label .g-sub{font-size:11px; color:var(--muted); white-space:nowrap; flex:none;}
+  .g-toggle{flex:none; width:18px; height:18px; border:none; background:none; cursor:pointer; color:var(--muted); font-size:11px; display:grid; place-items:center;}
+  .g-toggle:hover{color:var(--ink);}
+  .g-indent{padding-left:26px;}
+  .g-track{position:relative; min-height:30px;}
+  .g-node .g-track{min-height:26px;}
+  .today-line{position:absolute; top:0; bottom:0; width:2px; background:var(--risk-high); opacity:.45; z-index:1;}
+  .g-bar{position:absolute; top:50%; transform:translateY(-50%); height:16px; border-radius:8px; min-width:10px; background:#DFE4EE; display:flex; align-items:center; overflow:visible;}
+  .g-bar-ms{height:18px;}
+  .g-fill{height:100%; border-radius:8px;}
+  .g-bar-ms .g-fill{background:var(--brand);}
+  .g-bar-ms[data-risk="high"] .g-fill{background:var(--risk-high);}
+  .g-bar-ms[data-risk="mid"] .g-fill{background:var(--risk-mid);}
+  .g-bar-ms[data-risk="low"] .g-fill{background:var(--risk-low);}
+  .g-bar-ms[data-risk="done"] .g-fill{background:var(--risk-low);}
+  .g-diamond{position:absolute; right:-6px; top:50%; width:11px; height:11px; transform:translateY(-50%) rotate(45deg); background:var(--ink); border:2px solid var(--surface); border-radius:2px;}
+  .g-pct{position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%); font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap;}
+  .g-bar-node{height:13px;}
+  .g-bar-node.st-done .g-fill{background:var(--risk-low);}
+  .g-bar-node.st-doing .g-fill{background:var(--brand);}
+  .g-bar-node.st-blocked{background:#F3E3FB;} .g-bar-node.st-blocked .g-fill{background:var(--blocked);}
+  .g-bar-node.st-todo{background:transparent; border:1px dashed var(--muted);}
+  .g-bar-node .g-nlabel{position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%); font-size:11px; color:var(--muted); white-space:nowrap;}
+
+  /* 行（节点 / 问题通用） */
+  .row-item{display:flex; align-items:flex-start; gap:10px; background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--line); border-radius:9px; padding:11px 12px;}
+  .row-item[data-risk="high"]{border-left-color:var(--risk-high);}
+  .row-item[data-risk="mid"]{border-left-color:var(--risk-mid);}
+  .row-item[data-risk="low"]{border-left-color:var(--risk-low);}
+  .row-item[data-risk="done"]{border-left-color:var(--line); opacity:.62;}
+  .row-item[data-pri="P0"]{border-left-color:var(--p0);}
+  .row-item[data-pri="P1"]{border-left-color:var(--p1);}
+  .row-item[data-pri="P2"]{border-left-color:var(--p2);}
+  .row-item[data-pri="P3"]{border-left-color:var(--p3);}
+  .row-item .main{flex:1; min-width:0;}
+  .row-item .t{font-weight:600; word-break:break-word;}
+  .row-item .t.done{text-decoration:line-through; color:var(--muted);}
+  .row-item .meta{font-size:12px; color:var(--muted); margin-top:4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  .row-item .meta .mono{color:var(--ink);}
+  .row-item .chips{display:flex; gap:5px; flex-wrap:wrap; align-items:center;}
+  .controls{display:flex; align-items:center; gap:6px; flex:none;}
+  .icon-btn{border:1px solid var(--line); background:var(--surface); border-radius:7px; width:30px; height:30px; color:var(--muted); font-size:14px; display:grid; place-items:center;}
+  .icon-btn:hover{color:var(--ink); background:var(--bg);}
+
+  /* 附件缩略图 */
+  .attaches{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .thumb{width:46px; height:46px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer;}
+  .thumb:hover{border-color:var(--brand);}
+  .file-chip{font-size:12px; padding:5px 9px; border:1px solid var(--line); border-radius:7px; background:var(--bg); cursor:pointer; display:inline-flex; align-items:center; gap:4px;}
+  .file-chip:hover{border-color:var(--brand); color:var(--brand);}
+
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; align-items:center;}
+  select,input[type=text],input[type=date],textarea{font-family:inherit; font-size:13px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink);}
+  .btn{background:var(--brand); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600;}
+  .btn:hover{filter:brightness(.94);}
+  .btn.ghost{background:var(--surface); color:var(--ink); border:1px solid var(--line);}
+  .btn.ghost:hover{background:var(--bg); filter:none;}
+  .push-right{margin-left:auto;}
+
+  /* 负责人卡 */
+  .person-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px;}
+  .person-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:15px; cursor:pointer;}
+  .person-card:hover{border-color:var(--brand);}
+  .person-card .pname{font-weight:700; font-size:15px; display:flex; align-items:center; justify-content:space-between;}
+  .person-card .big{font-family:var(--mono); font-size:26px; font-weight:600;}
+  .person-card .seg-line{display:flex; gap:5px; flex-wrap:wrap; margin-top:10px;}
+  .person-card .pmeta{font-size:12px; color:var(--muted); margin-top:10px;}
+
+  .empty{text-align:center; color:var(--muted); padding:36px 0;}
+  .empty b{color:var(--ink); display:block; margin-bottom:4px;}
+
+  .gen-controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px;}
+  #genOut{width:100%; min-height:360px; font-family:var(--mono); font-size:13px; line-height:1.7; border:1px solid var(--line); border-radius:10px; padding:16px; resize:vertical; background:#FBFCFD; color:var(--ink);}
+
+  .overlay{position:fixed; inset:0; background:rgba(20,27,38,.45); display:none; place-items:center; z-index:50; padding:20px;}
+  .overlay.open{display:grid;}
+  .modal{background:var(--surface); border-radius:14px; padding:24px; width:100%; max-width:560px; box-shadow:0 20px 50px rgba(20,27,38,.25); max-height:92vh; overflow:auto;}
+  .modal h3{margin:0 0 18px;}
+  .field{margin-bottom:13px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px;}
+  .field input,.field select,.field textarea{width:100%;}
+  .field textarea{min-height:60px; resize:vertical;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:8px;}
+  .hidden-fields{border-top:1px dashed var(--line); margin-top:6px; padding-top:12px; display:none;}
+  .hidden-fields.show{display:block;}
+  .link-btn{background:none; border:none; color:var(--brand); font-size:12px; padding:4px 0; cursor:pointer;}
+  .file-input-wrap{display:flex; flex-direction:column; gap:8px;}
+  .upload-label{display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:7px 12px; border:1px dashed var(--line); border-radius:8px; cursor:pointer; color:var(--muted); width:fit-content;}
+  .upload-label:hover{border-color:var(--brand); color:var(--brand);}
+  .preview-list{display:flex; gap:6px; flex-wrap:wrap;}
+  .preview-item{position:relative;}
+  .preview-item .del{position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--ink); color:#fff; border:none; font-size:11px; display:grid; place-items:center; cursor:pointer;}
+  /* 拖拽 / 粘贴投放区 */
+  .dropzone{border:1px dashed var(--line); border-radius:9px; padding:10px; transition:.15s; outline:none; cursor:pointer;}
+  .dropzone:focus,.dropzone.active{border-color:var(--brand); background:var(--brand-weak);}
+  .dropzone.dragover{border-color:var(--brand); background:var(--brand-weak); border-style:solid;}
+  .dz-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .dz-hint{font-size:12px; color:var(--muted);}
+  .dropzone.active .dz-hint::before{content:'● 粘贴就绪 · '; color:var(--brand); font-weight:600;}
+  .dropzone .preview-list{margin-top:10px;}
+  .dropzone .preview-list:empty{display:none; margin:0;}
+
+  /* 图片灯箱 */
+  .lightbox{position:fixed; inset:0; background:rgba(0,0,0,.82); display:none; place-items:center; z-index:80; padding:24px;}
+  .lightbox.open{display:grid;}
+  .lightbox img{max-width:92vw; max-height:88vh; border-radius:8px;}
+  .lightbox .lb-close{position:absolute; top:18px; right:22px; color:#fff; font-size:30px; background:none; border:none; cursor:pointer;}
+  .lightbox .lb-name{position:absolute; bottom:18px; left:0; right:0; text-align:center; color:#fff; font-size:13px;}
+
+  .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:10px 18px; border-radius:999px; font-size:13px; opacity:0; pointer-events:none; transition:.25s; z-index:90;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  footer{text-align:center; color:var(--muted); font-size:12px; padding:30px 0 10px;}
+
+  /* 飞书风格表格 */
+  .table-wrap{border:1px solid var(--line); border-radius:var(--radius); overflow-x:auto; background:var(--surface);}
+  table.grid{border-collapse:collapse; width:100%; min-width:1060px; font-size:13px;}
+  table.grid th, table.grid td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap;}
+  table.grid thead th{position:sticky; top:0; background:#FAFBFC; z-index:2; font-weight:600; color:var(--muted); font-size:12px; border-bottom:1px solid var(--line);}
+  table.grid th.sortable{cursor:pointer; user-select:none;}
+  table.grid th.sortable:hover{color:var(--ink);}
+  table.grid th .arrow{font-size:10px; color:var(--brand); margin-left:2px;}
+  table.grid tbody tr{cursor:pointer;}
+  table.grid tbody tr:hover{background:#F7F9FF;}
+  table.grid tbody tr:last-child td{border-bottom:none;}
+  table.grid tr[data-pri="P0"] td:first-child{box-shadow:inset 3px 0 0 var(--p0);}
+  table.grid tr[data-pri="P1"] td:first-child{box-shadow:inset 3px 0 0 var(--p1);}
+  table.grid tr[data-pri="P2"] td:first-child{box-shadow:inset 3px 0 0 var(--p2);}
+  table.grid tr[data-pri="P3"] td:first-child{box-shadow:inset 3px 0 0 var(--p3);}
+  td.cell-content{white-space:normal; min-width:300px; max-width:420px;}
+  td.cell-content .clamp{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  td.col-num{color:var(--muted);}
+  td.due-over{color:var(--risk-high); font-weight:600;}
+  td.due-near{color:var(--risk-mid);}
+  .cell-attach{display:flex; align-items:center; gap:4px;}
+  .cell-attach img{width:26px; height:26px; object-fit:cover; border-radius:5px; border:1px solid var(--line);}
+  .cell-attach img:hover{border-color:var(--brand);}
+  .cell-attach .more{font-size:11px; color:var(--muted);}
+  .ops-cell{white-space:nowrap;}
+  .ops-cell .icon-btn{display:inline-grid; vertical-align:middle;}
+
+  @media (max-width:720px){
+    .tiles{grid-template-columns:repeat(2,1fr);}
+    .row-item{flex-wrap:wrap;} .controls{width:100%; justify-content:flex-end;}
+    .row2,.row3{grid-template-columns:1fr;}
+    .col-optional{display:none;}
+    .wrap{padding:18px 16px;}
+    .sidebar{width:60px;}
+    .app.expanded-mobile .sidebar{width:200px; position:fixed; z-index:40; box-shadow:0 10px 40px rgba(20,27,38,.18);}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+
+  /* 登录遮罩 */
+  .auth-overlay{position:fixed; inset:0; background:var(--bg); display:none; place-items:center; z-index:100; padding:20px;}
+  .auth-overlay.open{display:grid;}
+  .auth-card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:28px; width:100%; max-width:380px; box-shadow:0 20px 50px rgba(20,27,38,.12);}
+  .auth-brand{display:flex; align-items:center; gap:12px; margin-bottom:20px;}
+  .auth-title{font-weight:700; font-size:18px;}
+  .auth-sub{font-size:12px; color:var(--muted);}
+  .auth-error{display:none; background:#FDECEC; color:var(--risk-high); font-size:13px; padding:8px 11px; border-radius:8px; margin-bottom:12px;}
+  .auth-error.show{display:block;}
+  .auth-switch{font-size:12px; color:var(--muted); margin-top:14px; text-align:center;}
+  .auth-demo{text-align:center; margin-top:10px; border-top:1px dashed var(--line); padding-top:12px;}
+  /* 侧栏用户区 */
+  .su-name{font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .su-role{margin-top:2px;}
+  .su-actions{display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 12px;}
+  .su-link{background:none; border:none; color:var(--brand); font-size:12px; cursor:pointer; padding:0;}
+  .su-link:hover{text-decoration:underline;}
+  .members-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--line);}
+  .members-row .mr-name{font-weight:600; font-size:13px;}
+  .members-row .mr-mail{font-size:12px; color:var(--muted);}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <aside class="sidebar">
+    <button class="side-toggle" id="sideToggle" title="展开 / 收起导航" aria-label="展开或收起导航">☰</button>
+    <div class="side-brand"><div class="brand-mark">交</div><div class="name">交付管理台</div></div>
+    <nav class="side-nav">
+      <button class="nav-item active" data-view="overview" title="总览"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span class="lbl">总览</span></button>
+      <button class="nav-item" data-view="milestones" title="里程碑"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2.5 3.5L17 11H5"/></svg></span><span class="lbl">里程碑</span></button>
+      <button class="nav-item" data-view="nodes" title="节点"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><circle cx="4.5" cy="6" r="1.4"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="4.5" cy="18" r="1.4"/></svg></span><span class="lbl">节点</span></button>
+      <button class="nav-item" data-view="issues" title="问题清单"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M9 9v11"/></svg></span><span class="lbl">问题清单</span></button>
+      <button class="nav-item" data-view="generate" title="生成清单"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6"/><path d="M9 17h6"/></svg></span><span class="lbl">生成清单</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="su-name" id="suName">—</div>
+      <div class="su-role eyebrow" id="suRole"></div>
+      <div class="su-actions">
+        <button class="su-link" id="membersBtn" style="display:none">成员管理</button>
+        <button class="su-link" id="seedBtn" style="display:none">载入示例</button>
+        <button class="su-link" id="logoutBtn" style="display:none">退出</button>
+      </div>
+      <div class="d mono" id="todayDate">—</div><div class="eyebrow" id="todayWeek">—</div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="wrap">
+
+  <!-- 总览 -->
+  <section class="view active" id="view-overview">
+    <div class="tiles" id="tiles"></div>
+    <div style="display:flex; align-items:center; flex-wrap:wrap;">
+      <div class="seg" id="dimSeg">
+        <button data-dim="project" class="on">按项目</button>
+        <button data-dim="client">按客户</button>
+        <button data-dim="owner">按负责人</button>
+      </div>
+      <div class="seg small" id="tfSeg" style="display:none;">
+        <button data-tf="today">今日到期</button>
+        <button data-tf="week" class="on">本周</button>
+        <button data-tf="month">本月</button>
+        <button data-tf="all">全部</button>
+      </div>
+    </div>
+    <div id="overviewBody"></div>
+  </section>
+
+  <!-- 里程碑 -->
+  <section class="view" id="view-milestones">
+    <div class="ms-toolbar">
+      <select id="msProject"><option value="">全部项目</option></select>
+      <span class="eyebrow">关卡＝阶段 · 展开看节点 · 菱形＝目标日 · 红线＝今天</span>
+      <button class="btn ghost" id="expandAllBtn">展开全部</button>
+      <button class="btn ghost" id="collapseAllBtn">收起全部</button>
+      <button class="btn push-right" id="addMsBtn">+ 新建里程碑</button>
+    </div>
+    <div id="msBody"></div>
+  </section>
+
+  <!-- 节点 -->
+  <section class="view" id="view-nodes">
+    <div class="toolbar">
+      <select id="fClient"><option value="">全部客户</option></select>
+      <select id="fProject"><option value="">全部项目</option></select>
+      <select id="fOwner"><option value="">全部成员</option></select>
+      <select id="fStatus"><option value="">全部状态</option><option>未开始</option><option>进行中</option><option>已完成</option><option>阻塞</option></select>
+      <button class="btn push-right" id="addNodeBtn">+ 新建节点</button>
+    </div>
+    <div id="nodeList"></div>
+  </section>
+
+  <!-- 问题清单 -->
+  <section class="view" id="view-issues">
+    <div class="toolbar">
+      <div class="seg" id="issueViewSeg" style="margin:0;">
+        <button data-iview="table" class="on">⊞ 表格</button>
+        <button data-iview="card">▤ 卡片</button>
+      </div>
+      <select id="iClient"><option value="">全部医院</option></select>
+      <select id="iOwner"><option value="">全部负责人</option></select>
+      <select id="iPriority"><option value="">全部优先级</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+      <select id="iCategory"><option value="">全部大类</option></select>
+      <select id="iSubcat"><option value="">全部细分类</option></select>
+      <select id="iStatus"><option value="">全部状态</option></select>
+      <button class="btn ghost" id="exportBtn">⬇ 导出 CSV</button>
+      <label style="font-size:12px; color:var(--muted); display:inline-flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="exportAttachNames"> 含附件文件名</label>
+      <button class="btn push-right" id="addIssueBtn">+ 记录问题</button>
+    </div>
+    <div id="issueList"></div>
+  </section>
+
+  <!-- 生成清单 -->
+  <section class="view" id="view-generate">
+    <div class="panel">
+      <h3>生成飞书清单</h3>
+      <div class="hint">按负责人分组，高优先级 / 逾期置顶并标记，每条带「医院·来源」上下文，末尾附全队风险提示。可选内容来源与时间范围，复制即可粘贴到飞书群。</div>
+      <div class="gen-controls">
+        <select id="genSource">
+          <option value="both">问题 + 项目节点</option>
+          <option value="issue">仅问题清单</option>
+          <option value="node">仅项目节点</option>
+        </select>
+        <select id="genScope"><option value="">全部范围</option></select>
+        <select id="genTime">
+          <option value="all">全部待办</option>
+          <option value="today">今日到期</option>
+          <option value="week" selected>本周到期</option>
+          <option value="month">本月到期</option>
+        </select>
+        <button class="btn ghost" id="genBtn">↻ 生成</button>
+        <button class="btn push-right" id="copyBtn">复制到剪贴板</button>
+      </div>
+      <textarea id="genOut" readonly></textarea>
+    </div>
+  </section>
+    </div>
+  </main>
+</div>
+
+<!-- 里程碑（关卡）弹窗 -->
+<div class="overlay" id="msOverlay">
+  <div class="modal">
+    <h3 id="msModalTitle">新建里程碑</h3>
+    <div class="field"><label>所属项目 *</label><select id="mmProject"></select></div>
+    <div class="field"><label>里程碑名称 *</label><input type="text" id="mmName" placeholder="如 算法联调"></div>
+    <div class="row3">
+      <div class="field"><label>开始日期</label><input type="date" id="mmStart"></div>
+      <div class="field"><label>目标日期 *</label><input type="date" id="mmDue"></div>
+      <div class="field"><label>里程碑负责人</label><input type="text" id="mmOwner" list="ownerList" placeholder="姓名"></div>
+    </div>
+    <div class="field"><label>交付物 / 阶段目标</label><textarea id="mmDeliverable" placeholder="如 核心词条算法联调通过，结论词输出达标"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeOverlay('msOverlay')">取消</button>
+      <button class="btn" id="saveMsBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 节点弹窗 -->
+<div class="overlay" id="nodeOverlay">
+  <div class="modal">
+    <h3 id="nodeModalTitle">新建节点</h3>
+    <div class="row2">
+      <div class="field"><label>所属项目</label><select id="nProject"></select></div>
+      <div class="field"><label>所属里程碑</label><select id="nMilestone"></select></div>
+    </div>
+    <div class="field"><label>节点名称</label><input type="text" id="nTitle" placeholder="例如：接口联调"></div>
+    <div class="row2">
+      <div class="field"><label>负责人</label><input type="text" id="nOwner" placeholder="姓名"></div>
+      <div class="field"><label>截止日期</label><input type="date" id="nDue"></div>
+    </div>
+    <div class="field"><label>状态</label><select id="nStatus"><option>未开始</option><option selected>进行中</option><option>已完成</option><option>阻塞</option></select></div>
+    <div class="field"><label>备注（可选）</label><input type="text" id="nNote"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeOverlay('nodeOverlay')">取消</button>
+      <button class="btn" id="saveNodeBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 问题弹窗 -->
+<div class="overlay" id="issueOverlay">
+  <div class="modal">
+    <h3 id="issueModalTitle">记录问题</h3>
+    <div class="field"><label>问题内容 *</label><textarea id="iContent" placeholder="例如：双耳听力筛查未通过，但只提取了左耳"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>客户 / 医院 *</label><input type="text" id="iClientIn" list="clientList" placeholder="如 航天总"></div>
+      <div class="field"><label>优先级 *</label><select id="iPri"><option>P0</option><option selected>P1</option><option>P2</option><option>P3</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>问题大类 *</label><select id="iCat"></select></div>
+      <div class="field"><label>细分类（可选，随大类变化）</label><select id="iSub"></select></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label>负责人 *</label><input type="text" id="iOwnerIn" list="ownerList" placeholder="姓名"></div>
+      <div class="field"><label>问题状态 *</label><select id="iStat"></select></div>
+      <div class="field"><label>预计解决时间 *</label><input type="date" id="iDue"></div>
+    </div>
+    <div class="field"><label>附件（文件 / 图片，可多选；选择 · 拖拽 · 或 Ctrl+V 粘贴；点击缩略图放大）</label>
+      <div class="dropzone" id="attachZone" tabindex="0" data-target="attach">
+        <div class="dz-row">
+          <label class="upload-label">📎 选择附件<input type="file" id="iAttachInput" multiple style="display:none"></label>
+          <span class="dz-hint">或把图片/文件拖到此处，或 Ctrl+V 粘贴</span>
+        </div>
+        <div class="preview-list" id="iAttachPreview"></div>
+      </div>
+    </div>
+    <div class="field"><label>处理方案（可选）</label><textarea id="iSolution"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>实际解决时间（可选）</label><input type="date" id="iSolved"></div>
+      <div class="field"><label>验证结论（可选）</label><select id="iVerify"><option value="">—</option><option>待验证</option><option>验证通过</option><option>验证不通过</option></select></div>
+    </div>
+    <div class="field"><label>验证截图（可选；同样支持选择 / 拖拽 / 粘贴）</label>
+      <div class="dropzone" id="verifyZone" tabindex="0" data-target="verify">
+        <div class="dz-row">
+          <label class="upload-label">🖼 选择截图<input type="file" id="iVerifyInput" accept="image/*" multiple style="display:none"></label>
+          <span class="dz-hint">或把图片拖到此处，或 Ctrl+V 粘贴</span>
+        </div>
+        <div class="preview-list" id="iVerifyPreview"></div>
+      </div>
+    </div>
+    <div class="field"><label>备注（可选）</label><input type="text" id="iNote"></div>
+    <button class="link-btn" id="toggleHidden">＋ 显示创建人 / 提出人（默认隐藏）</button>
+    <div class="hidden-fields" id="hiddenFields">
+      <div class="row2">
+        <div class="field"><label>创建人</label><input type="text" id="iCreator"></div>
+        <div class="field"><label>提出人</label><input type="text" id="iProposer"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeOverlay('issueOverlay')">取消</button>
+      <button class="btn" id="saveIssueBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="clientList"></datalist>
+<datalist id="ownerList"></datalist>
+
+<!-- 图片灯箱 -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" onclick="closeLightbox()">×</button>
+  <img id="lbImg" src="" alt="">
+  <div class="lb-name" id="lbName"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 登录遮罩 -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div class="auth-brand"><div class="brand-mark">交</div><div><div class="auth-title">交付管理台</div><div class="auth-sub" id="authSub">登录以查看与协作项目进度</div></div></div>
+    <div class="auth-error" id="authError"></div>
+    <div class="field" id="authNameField" style="display:none"><label>姓名</label><input type="text" id="authName" placeholder="显示名"></div>
+    <div class="field"><label>邮箱</label><input type="email" id="authEmail" placeholder="you@example.com" autocomplete="username"></div>
+    <div class="field"><label>密码</label><input type="password" id="authPwd" placeholder="至少 6 位" autocomplete="current-password"></div>
+    <button class="btn" id="authSubmit" style="width:100%">登录</button>
+    <div class="auth-switch"><span id="authSwitchText">还没有账号？</span> <button class="link-btn" id="authToggle">注册</button></div>
+    <div class="auth-demo"><button class="link-btn" id="authDemo">以演示模式本地预览（不联网、不保存）</button></div>
+  </div>
+</div>
+
+<!-- 成员管理 -->
+<div class="overlay" id="membersOverlay">
+  <div class="modal">
+    <h3>成员管理</h3>
+    <div id="membersList"><div class="empty">加载中…</div></div>
+    <div class="modal-actions"><button class="btn ghost" onclick="closeOverlay('membersOverlay')">关闭</button></div>
+  </div>
+</div>
+
+<footer>多人协作版 · 数据共享于 Cloudflare D1 · 项目→里程碑→节点 ＋ 问题清单（附件本体暂不同步）</footer>
+
+<script>
+/* ======================================================================
+   数据模型：
+   项目 project(名称, 交付客户) → 里程碑 milestone → 节点 node
+   问题 issue(业务录入)：内容/客户(医院)/优先级/分类(归因)/状态/负责人/预计解决/附件/验证…
+   - 风险由「截止/预计解决 + 状态」自动推导；问题的“严重度”＝优先级 P0~P3。
+   - 总览「按负责人」按时间范围聚合每人的待办，统计 P0/分类构成。
+   - 生成清单同时采纳问题与节点。
+   ====================================================================== */
+const pad=n=>String(n).padStart(2,'0');
+const fmt=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const short=s=>s?s.slice(5):'';
+const today=new Date(); today.setHours(0,0,0,0);
+const rel=n=>{const d=new Date(today); d.setDate(d.getDate()+n); return fmt(d);};
+const weekdayCN=['周日','周一','周二','周三','周四','周五','周六'][today.getDay()];
+document.getElementById('todayDate').textContent=fmt(today);
+document.getElementById('todayWeek').textContent=weekdayCN;
+
+// 枚举
+const BIGCATS=['医学需求','算法需求','算法bug','产品需求','产品bug','数据问题'];
+// 细分类跟随大类：医学需求/算法需求/算法bug 共用以下细分；其余大类暂无预定义细分
+const SUBCAT_DEFAULT=['词条提取','词条展示','词条合并','词条建议','词条科普','诊断依据','词条整体排序','词条内部排序','综合建议','其他'];
+function subcatsFor(bigcat){ return ['医学需求','算法需求','算法bug'].includes(bigcat) ? SUBCAT_DEFAULT : []; }
+function fillSubcat(selectEl, bigcat, current){
+  const subs=subcatsFor(bigcat);
+  selectEl.innerHTML = `<option value="">—（可选）</option>`+subs.map(s=>`<option ${s===current?'selected':''}>${esc(s)}</option>`).join('');
+}
+const ISTATUS=['待排查','处理中','待发版','测试不通过','已解决','已关闭'];
+const ISTATUS_OPEN=s=>s!=='已解决'&&s!=='已关闭';
+const PRIORITY={P0:'P0 紧急',P1:'P1 高',P2:'P2 中',P3:'P3 低'};
+const priRank={P0:0,P1:1,P2:2,P3:3};
+const riskRank={high:0,mid:1,low:2,done:3};
+
+// 生成示例截图（SVG dataURL，便于演示“点开附件”）
+function svgShot(title,line){
+  const s=`<svg xmlns='http://www.w3.org/2000/svg' width='460' height='300'><rect width='460' height='300' fill='#eef1f6'/><rect width='460' height='34' fill='#2D5BFF'/><text x='14' y='22' fill='#fff' font-family='sans-serif' font-size='13'>${title}</text><rect x='16' y='52' width='428' height='1' fill='#cfd6e2'/><text x='16' y='86' fill='#222' font-family='sans-serif' font-size='14'>${line}</text><rect x='16' y='110' width='300' height='12' rx='3' fill='#d3dae6'/><rect x='16' y='134' width='360' height='12' rx='3' fill='#d3dae6'/><rect x='16' y='158' width='250' height='12' rx='3' fill='#d3dae6'/><rect x='16' y='196' width='160' height='34' rx='6' fill='#E5484D' opacity='.15'/><text x='28' y='218' fill='#E5484D' font-family='sans-serif' font-size='13'>异常：需修正</text></svg>`;
+  return 'data:image/svg+xml,'+encodeURIComponent(s);
+}
+const shotA=svgShot('体检报告截图','听力筛查：双耳未通过');
+const shotB=svgShot('妇科彩超截图','子宫附件 / 妇科彩超 合并展示');
+
+let pid=1,mid=1,nid=1,iid=1;
+const state={
+  projects:[
+    {id:pid++, name:'航天总智慧体检交付', client:'航天总'},
+    {id:pid++, name:'温附一智慧体检交付', client:'温附一'},
+    {id:pid++, name:'中山总质控模块',     client:'中山总'},
+    {id:pid++, name:'嘉二体检报告优化',   client:'嘉二'},
+  ],
+  milestones:[
+    {id:mid++, projectId:1, name:'需求确认', start:rel(-22), due:rel(-12), owner:'肖茜',   deliverable:'需求规格说明书与院方对齐并签字确认'},
+    {id:mid++, projectId:1, name:'算法联调', start:rel(-11), due:rel(3),   owner:'陈镜宇', deliverable:'核心词条算法联调通过，结论词输出达标'},
+    {id:mid++, projectId:1, name:'上线验收', start:rel(4),   due:rel(18),  owner:'肖茜',   deliverable:'客户验收报告签字，正式上线'},
+    {id:mid++, projectId:2, name:'需求确认', start:rel(-18), due:rel(-8),  owner:'肖茜',   deliverable:'需求与温附一院方确认'},
+    {id:mid++, projectId:2, name:'算法联调', start:rel(-7),  due:rel(5),   owner:'陈镜宇', deliverable:'映射与合并规则联调通过'},
+    {id:mid++, projectId:2, name:'上线验收', start:rel(6),   due:rel(22),  owner:'肖茜',   deliverable:'验收通过，发布上线'},
+    {id:mid++, projectId:3, name:'质控规则梳理', start:rel(-9), due:rel(2),  owner:'吕任婕', deliverable:'质控规则集评审定稿'},
+    {id:mid++, projectId:3, name:'质控上线',     start:rel(3),  due:rel(16), owner:'吕任婕', deliverable:'质控模块上线并通过验收'},
+    {id:mid++, projectId:4, name:'报告优化',     start:rel(-5), due:rel(6),  owner:'李颖娴', deliverable:'报告排版与建议优化交付'},
+  ],
+  nodes:[
+    {id:nid++, projectId:1, milestoneId:1, title:'需求访谈',     owner:'肖茜',   due:rel(-14), status:'已完成', note:''},
+    {id:nid++, projectId:1, milestoneId:2, title:'结论词转写联调', owner:'陈镜宇', due:rel(-1),  status:'进行中', note:''},
+    {id:nid++, projectId:1, milestoneId:2, title:'戒烟限酒过滤逻辑', owner:'毛焰春', due:rel(2),  status:'进行中', note:''},
+    {id:nid++, projectId:1, milestoneId:3, title:'上线回归测试',   owner:'肖茜',   due:rel(16),  status:'未开始', note:''},
+    {id:nid++, projectId:2, milestoneId:4, title:'映射词条梳理',   owner:'李颖娴', due:rel(-8),  status:'已完成', note:''},
+    {id:nid++, projectId:2, milestoneId:5, title:'部位合并规则更新', owner:'陈镜宇', due:rel(4),  status:'阻塞',   note:'等待院方补充案例'},
+    {id:nid++, projectId:3, milestoneId:7, title:'质控规则评审',   owner:'吕任婕', due:rel(2),   status:'进行中', note:''},
+    {id:nid++, projectId:3, milestoneId:8, title:'质控上线准备',   owner:'吕任婕', due:rel(15),  status:'未开始', note:''},
+    {id:nid++, projectId:4, milestoneId:9, title:'报告排版优化',   owner:'陶利超', due:rel(6),   status:'进行中', note:''},
+  ],
+  issues:[
+    {id:iid++, code:886, content:'中医经络结论需按模板展示体质倾向：“您目前的体质倾向于 XX、XX 体质”', client:'航天总', priority:'P0', category:'算法需求', subcat:'词条展示', status:'待发版', owner:'陈镜宇', due:rel(0), solution:'结论词输出表已改，待发版', solved:'', verify:'待验证', note:'词条展示需求', creator:'肖茜', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:890, content:'无吸烟饮酒史用户不应出现“戒烟限酒”表述，需在建议输出加一层过滤', client:'航天总', priority:'P0', category:'算法需求', subcat:'综合建议', status:'待发版', owner:'毛焰春', due:rel(-1), solution:'', solved:'', verify:'', note:'建议问题', creator:'肖茜', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:889, content:'体检号双耳听力筛查未通过，但只提取了左耳', client:'航天总', priority:'P0', category:'算法bug', subcat:'词条提取', status:'待排查', owner:'陈镜宇', due:rel(1), solution:'', solved:'', verify:'', note:'词条漏提取', creator:'肖茜', proposer:'', attaches:[{name:'听力截图.svg',type:'image/svg+xml',dataUrl:shotA}], verifyShots:[]},
+    {id:iid++, code:871, content:'血脂异常、幽门螺杆菌、胆红素检验结果错误合并', client:'温附一', priority:'P0', category:'算法bug', subcat:'词条合并', status:'处理中', owner:'陈镜宇', due:rel(-3), solution:'缓存部位未删干净，导致错误合并', solved:'', verify:'', note:'', creator:'肖茜', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:875, content:'心动过缓规则匹配错误，应匹配 ZJHB00548', client:'温附一', priority:'P0', category:'算法bug', subcat:'词条建议', status:'处理中', owner:'李颖娴', due:rel(2), solution:'', solved:'', verify:'', note:'', creator:'肖茜', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:38, content:'视力问题应判断为屈光不正 / 视力下降，而非直接写“视力：0.8”', client:'温附一', priority:'P1', category:'算法需求', subcat:'词条展示', status:'测试不通过', owner:'陈镜宇', due:rel(-2), solution:'', solved:'', verify:'验证不通过', note:'再次处理', creator:'肖茜', proposer:'丹红主任', attaches:[], verifyShots:[]},
+    {id:iid++, code:672, content:'子宫附件检查与妇科彩超合并，需医学评估合并口径', client:'中山总', priority:'P2', category:'医学需求', subcat:'词条合并', status:'处理中', owner:'吕任婕', due:rel(5), solution:'规则表已排查，需算法评估', solved:'', verify:'验证不通过', note:'', creator:'肖茜', proposer:'魏怡然老师', attaches:[{name:'妇科彩超.svg',type:'image/svg+xml',dataUrl:shotB}], verifyShots:[]},
+    {id:iid++, code:781, content:'“肠镜检查提示肛管手术后改变”被错写为“胃镜提示…”', client:'嘉二', priority:'P1', category:'算法bug', subcat:'词条提取', status:'处理中', owner:'李颖娴', due:rel(3), solution:'', solved:'', verify:'', note:'', creator:'肖茜', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:910, content:'数据导入时医院字段映射配置填错，导致一批报告归错医院', client:'嘉二', priority:'P1', category:'数据问题', subcat:'', status:'处理中', owner:'王超', due:rel(1), solution:'已订正映射配置，需回归核对', solved:'', verify:'', note:'人为配置失误', creator:'王超', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:714, content:'人体成分分析项目处理方式待定：暂不显示 或 合并输出并加建议过滤', client:'贵州茅台', priority:'P1', category:'产品需求', subcat:'', status:'待排查', owner:'吕任婕', due:rel(8), solution:'', solved:'', verify:'', note:'', creator:'吕任婕', proposer:'', attaches:[], verifyShots:[]},
+    {id:iid++, code:802, content:'糖尿病史与甲状腺抗体错误合并，糖尿病史应匹配 ZJHB00839', client:'温附一', priority:'P0', category:'算法bug', subcat:'词条合并', status:'已解决', owner:'陈镜宇', due:rel(-6), solution:'已在规则表订正归类', solved:rel(-4), verify:'验证通过', note:'', creator:'肖茜', proposer:'', attaches:[], verifyShots:[]},
+  ],
+  dimension:'project',
+  tf:'week',
+  expanded:{},
+  filter:{client:'',project:'',owner:'',status:''},
+  ifilter:{client:'',owner:'',priority:'',category:'',subcat:'',status:''},
+  issueView:'table', isort:null,
+  editing:null,
+};
+
+// 临时附件缓冲（编辑中）
+let tempAttach=[], tempVerify=[];
+
+// —— 关系 ——
+const projectById=id=>state.projects.find(p=>p.id===id);
+const milestoneById=id=>state.milestones.find(m=>m.id===id);
+const nodesOfProject=id=>state.nodes.filter(n=>n.projectId===id);
+const nodesOfMilestone=id=>state.nodes.filter(n=>n.milestoneId===id);
+const milestonesOfProject=id=>state.milestones.filter(m=>m.projectId===id);
+const allClients=()=>[...new Set([...state.projects.map(p=>p.client), ...state.issues.map(i=>i.client)])];
+const allOwners=()=>[...new Set([...state.nodes.map(n=>n.owner), ...state.issues.map(i=>i.owner)])];
+
+// —— 节点风险 ——
+function nodeRisk(n){
+  if(n.status==='已完成') return {level:'done',label:'已完成',kind:'done'};
+  if(n.status==='阻塞')   return {level:'high',label:'阻塞',kind:'blocked'};
+  const d=new Date(n.due); d.setHours(0,0,0,0);
+  const diff=Math.round((d-today)/86400000);
+  if(diff<0)  return {level:'high',label:`逾期${-diff}天`,kind:'high'};
+  if(diff<=3) return {level:'mid',label:diff===0?'今日到期':`${diff}天内`,kind:'mid'};
+  return {level:'low',label:'正常',kind:'low'};
+}
+// —— 问题时间风险（仅用于逾期标记/排序，严重度看优先级）——
+function issueTimeRisk(i){
+  if(!ISTATUS_OPEN(i.status)) return {level:'done',label:'已闭环'};
+  const d=new Date(i.due); d.setHours(0,0,0,0);
+  const diff=Math.round((d-today)/86400000);
+  if(diff<0)  return {level:'high',label:`逾期${-diff}天`};
+  if(diff<=3) return {level:'mid',label:diff===0?'今日到期':`${diff}天内`};
+  return {level:'low',label:''};
+}
+function progressOf(nodes){ if(!nodes.length) return 0; return Math.round(nodes.filter(n=>n.status==='已完成').length/nodes.length*100); }
+function worstRisk(nodes){ const open=nodes.filter(n=>n.status!=='已完成'); if(!open.length) return {level:'done',kind:'done',label:'已完成'}; return open.map(nodeRisk).sort((a,b)=>riskRank[a.level]-riskRank[b.level])[0]; }
+function milestoneRisk(m){
+  const ns=nodesOfMilestone(m.id);
+  if(ns.length&&ns.every(n=>n.status==='已完成')) return {level:'done',kind:'done',label:'已完成'};
+  const w=worstRisk(ns);
+  const d=new Date(m.due); d.setHours(0,0,0,0);
+  if(d<today&&w.level!=='done') return {level:'high',kind:'high',label:'里程碑逾期'};
+  return w;
+}
+
+// —— 指标 ——
+function renderTiles(){
+  const openIssues=state.issues.filter(i=>ISTATUS_OPEN(i.status));
+  const p0=openIssues.filter(i=>i.priority==='P0').length;
+  const overdue=openIssues.filter(i=>issueTimeRisk(i).level==='high').length;
+  const tiles=[
+    {label:'进行中项目', num:state.projects.length},
+    {label:'待办问题', num:openIssues.length},
+    {label:'P0 问题', num:p0, cls:p0?'alert':''},
+    {label:'逾期问题', num:overdue, cls:overdue?'warn':''},
+  ];
+  document.getElementById('tiles').innerHTML=tiles.map(t=>`<div class="tile ${t.cls||''}"><div class="label">${t.label}</div><div class="num">${t.num}</div></div>`).join('');
+}
+
+// —— 项目卡 ——
+function projectCard(p){
+  const ns=nodesOfProject(p.id);
+  const prog=progressOf(ns);
+  const risk=worstRisk(ns);
+  const openMs=milestonesOfProject(p.id).filter(m=>nodesOfMilestone(m.id).some(n=>n.status!=='已完成')||!nodesOfMilestone(m.id).length).sort((a,b)=>new Date(a.due)-new Date(b.due));
+  const next=openMs[0];
+  const issueOpen=state.issues.filter(i=>i.client===p.client&&ISTATUS_OPEN(i.status)).length;
+  const p0=state.issues.filter(i=>i.client===p.client&&ISTATUS_OPEN(i.status)&&i.priority==='P0').length;
+  return `
+  <div class="proj-card">
+    <div class="proj-top">
+      <span class="proj-name" onclick="gotoProject(${p.id})">${esc(p.name)}</span>
+      <span class="proj-client">${esc(p.client)}</span>
+      <span class="chip ${risk.kind}" style="margin-left:auto">${risk.label}</span>
+    </div>
+    <div class="progress-wrap"><div class="bar"><i style="width:${prog}%"></i></div><span class="pct">${prog}%</span></div>
+    <div class="proj-meta">
+      <span>节点 <b>${ns.length}</b></span>
+      <span>待办问题 <b>${issueOpen}</b></span>
+      <span>P0 <b style="color:${p0?'var(--p0)':'inherit'}">${p0}</b></span>
+      ${next?`<span>下一里程碑 <b>${esc(next.name)}</b> · <span class="mono">${short(next.due)}</span></span>`:'<span>里程碑已完成 ✓</span>'}
+    </div>
+  </div>`;
+}
+
+// —— 负责人卡（按时间范围聚合问题）——
+function inTimeframe(due, tf){
+  if(tf==='all') return true;
+  const d=new Date(due); d.setHours(0,0,0,0);
+  const diff=Math.round((d-today)/86400000);
+  if(tf==='today') return diff<=0;
+  if(tf==='week')  return diff<=7;
+  if(tf==='month') return diff<=30;
+  return true;
+}
+function personCard(owner){
+  const tf=state.tf;
+  const mine=state.issues.filter(i=>i.owner===owner);
+  const open=mine.filter(i=>ISTATUS_OPEN(i.status)&&inTimeframe(i.due,tf));
+  const total=mine.length, done=mine.filter(i=>!ISTATUS_OPEN(i.status)).length;
+  const byPri={P0:0,P1:0,P2:0,P3:0}; open.forEach(i=>byPri[i.priority]++);
+  const byCat={}; open.forEach(i=>byCat[i.category]=(byCat[i.category]||0)+1);
+  const nodeOpen=state.nodes.filter(n=>n.owner===owner&&n.status!=='已完成').length;
+  const priChips=Object.keys(byPri).filter(k=>byPri[k]).map(k=>`<span class="chip ${k.toLowerCase()}">${k}·${byPri[k]}</span>`).join('');
+  const catChips=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]).map(c=>`<span class="chip cat">${esc(c)}·${byCat[c]}</span>`).join('');
+  return `
+  <div class="person-card" onclick="gotoIssuesByOwner('${esc(owner)}')">
+    <div class="pname">${esc(owner)} <span class="big">${open.length}</span></div>
+    <div class="eyebrow">待办问题</div>
+    <div class="seg-line">${priChips||'<span class="chip done">无待办</span>'}</div>
+    ${catChips?`<div class="seg-line">${catChips}</div>`:''}
+    <div class="pmeta">已闭环 ${done}/${total} · 项目节点 ${nodeOpen}</div>
+  </div>`;
+}
+
+function renderOverview(){
+  const body=document.getElementById('overviewBody');
+  document.getElementById('tfSeg').style.display = state.dimension==='owner' ? 'inline-flex' : 'none';
+  if(state.dimension==='project'){
+    body.innerHTML=state.projects.map(projectCard).join('');
+  }else if(state.dimension==='client'){
+    const clients=[...new Set(state.projects.map(p=>p.client))];
+    body.innerHTML=clients.map(c=>{
+      const ps=state.projects.filter(p=>p.client===c);
+      const allNodes=ps.flatMap(p=>nodesOfProject(p.id));
+      const prog=progressOf(allNodes);
+      const p0=state.issues.filter(i=>i.client===c&&ISTATUS_OPEN(i.status)&&i.priority==='P0').length;
+      const openIssues=state.issues.filter(i=>i.client===c&&ISTATUS_OPEN(i.status)).length;
+      return `<div class="client-head"><span class="name">${esc(c)}</span><span class="roll">${ps.length} 个项目 · 进度 ${prog}% · 待办问题 ${openIssues} · P0 ${p0}</span></div>${ps.map(projectCard).join('')}`;
+    }).join('');
+  }else{
+    const owners=allOwners();
+    const cards=owners.map(personCard).join('');
+    body.innerHTML=`<div class="person-grid">${cards}</div>`;
+  }
+}
+
+// —— 甘特图 ——
+function spanOf(item){
+  const end=new Date(item.due);
+  const start=item.start?new Date(item.start):new Date(end.getTime()-5*86400000);
+  return {start,end};
+}
+function ganttRange(p){
+  const items=[...milestonesOfProject(p.id),...nodesOfProject(p.id)];
+  let min=Infinity,max=-Infinity;
+  items.forEach(it=>{const sp=spanOf(it); min=Math.min(min,sp.start.getTime()); max=Math.max(max,sp.end.getTime());});
+  if(min===Infinity){ min=today.getTime(); max=today.getTime()+30*86400000; }
+  const s=new Date(min); s.setDate(1); s.setHours(0,0,0,0);
+  const e=new Date(max); e.setMonth(e.getMonth()+1,0); e.setHours(0,0,0,0);
+  const months=[]; const cur=new Date(s);
+  while(cur<=e){ months.push({y:cur.getFullYear(),m:cur.getMonth()}); cur.setMonth(cur.getMonth()+1); }
+  return {s,e,months};
+}
+function xPct(d,rng){
+  const dt=new Date(d);
+  const idx=(dt.getFullYear()-rng.s.getFullYear())*12+(dt.getMonth()-rng.s.getMonth());
+  const dim=new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate();
+  const frac=(dt.getDate()-1)/dim;
+  return Math.max(0,Math.min(100,(idx+frac)/rng.months.length*100));
+}
+function gridBg(rng){
+  const colW=100/rng.months.length;
+  return `background:repeating-linear-gradient(90deg, transparent 0, transparent calc(${colW}% - 1px), var(--line) calc(${colW}% - 1px), var(--line) ${colW}%);`;
+}
+function todayLine(rng){
+  const t=today.getTime();
+  if(t<rng.s.getTime()||t>rng.e.getTime()) return '';
+  return `<div class="today-line" style="left:${xPct(today,rng)}%" title="今天"></div>`;
+}
+function nodeBarStyle(n){
+  if(n.status==='已完成') return {cls:'st-done',pct:100};
+  if(n.status==='进行中') return {cls:'st-doing',pct:50};
+  if(n.status==='阻塞')   return {cls:'st-blocked',pct:40};
+  return {cls:'st-todo',pct:0};
+}
+function gMilestoneRow(m,rng){
+  const r=milestoneRisk(m); const mp=progressOf(nodesOfMilestone(m.id));
+  const sp=spanOf(m); const L=xPct(sp.start,rng), R=xPct(sp.end,rng), W=Math.max(R-L,1.5);
+  const open=state.expanded[m.id]; const nc=nodesOfMilestone(m.id).length;
+  return `
+  <div class="g-row g-ms">
+    <div class="g-label">
+      <button class="g-toggle" onclick="toggleMs(${m.id})">${open?'▾':'▸'}</button>
+      <span class="ms-badge">关卡</span>
+      <span class="g-name" title="${m.deliverable?esc(m.deliverable):esc(m.name)}">${esc(m.name)}</span>
+      <span class="g-sub">${m.owner?esc(m.owner):'—'}·${nc}节点</span>
+      <button class="icon-btn" style="width:24px;height:24px;font-size:12px" onclick="openMsEdit(${m.id})" title="编辑">✎</button>
+      <button class="icon-btn" style="width:24px;height:24px;font-size:12px" onclick="delMs(${m.id})" title="删除">✕</button>
+    </div>
+    <div class="g-track" style="${gridBg(rng)}">
+      ${todayLine(rng)}
+      <div class="g-bar g-bar-ms" data-risk="${r.level}" style="left:${L}%; width:${W}%" title="${esc(m.name)}　${short(fmt(sp.start))}~${short(fmt(sp.end))}　${r.label}">
+        <span class="g-fill" style="width:${mp}%"></span>
+        <span class="g-diamond"></span>
+        <span class="g-pct">${mp}%</span>
+      </div>
+    </div>
+  </div>`;
+}
+function gNodeRow(n,rng){
+  const sp=spanOf(n); const L=xPct(sp.start,rng), R=xPct(sp.end,rng), W=Math.max(R-L,1.2);
+  const st=nodeBarStyle(n);
+  return `
+  <div class="g-row g-node">
+    <div class="g-label g-indent">
+      <span class="g-name-sm">${esc(n.title)}</span>
+      <span class="g-sub">${esc(n.owner)}·${n.status}</span>
+    </div>
+    <div class="g-track" style="${gridBg(rng)}">
+      ${todayLine(rng)}
+      <div class="g-bar g-bar-node ${st.cls}" style="left:${L}%; width:${W}%" title="${esc(n.title)}　${short(fmt(sp.start))}~${short(fmt(sp.end))}　${n.status}">
+        <span class="g-fill" style="width:${st.pct}%"></span>
+        <span class="g-nlabel">${short(fmt(sp.end))}</span>
+      </div>
+    </div>
+  </div>`;
+}
+function ganttProject(p){
+  const rng=ganttRange(p); const prog=progressOf(nodesOfProject(p.id));
+  const ms=milestonesOfProject(p.id).sort((a,b)=>spanOf(a).start-spanOf(b).start);
+  const monthHead=rng.months.map(mo=>`<span class="g-month">${mo.m+1}月</span>`).join('');
+  let rows='';
+  ms.forEach(m=>{
+    rows+=gMilestoneRow(m,rng);
+    if(state.expanded[m.id]){
+      const nodes=nodesOfMilestone(m.id).sort((a,b)=>spanOf(a).start-spanOf(b).start);
+      rows+= nodes.length ? nodes.map(n=>gNodeRow(n,rng)).join('') : `<div class="g-row g-node"><div class="g-label g-indent"><span class="g-sub">暂无节点</span></div><div class="g-track"></div></div>`;
+    }
+  });
+  if(!ms.length) rows=`<div class="g-row g-node"><div class="g-label g-indent"><span class="g-sub">暂无里程碑，点右上「新建里程碑」</span></div><div class="g-track"></div></div>`;
+  return `
+  <div class="gantt-proj">
+    <div class="gantt-projhead">
+      <span class="proj-name" style="cursor:default">${esc(p.name)}</span>
+      <span class="proj-client">${esc(p.client)}</span>
+      <div class="bar" style="max-width:160px"><i style="width:${prog}%"></i></div><span class="pct">${prog}%</span>
+    </div>
+    <div class="gantt">
+      <div class="g-row g-head"><div class="g-label">里程碑 / 节点</div><div class="g-monthhead">${monthHead}</div></div>
+      ${rows}
+    </div>
+  </div>`;
+}
+function toggleMs(id){ state.expanded[id]=!state.expanded[id]; renderMilestones(); }
+function setExpandAll(v){ if(v) state.milestones.forEach(m=>state.expanded[m.id]=true); else state.expanded={}; renderMilestones(); }
+function renderMilestones(){
+  const sel=document.getElementById('msProject').value;
+  const ps=sel?state.projects.filter(p=>p.id===+sel):state.projects;
+  document.getElementById('msBody').innerHTML=ps.map(ganttProject).join('');
+}
+// —— 里程碑（关卡）增删改 ——
+function openMsAdd(){
+  state.editing=null; document.getElementById('msModalTitle').textContent='新建里程碑';
+  const sel=document.getElementById('msProject').value;
+  mmProject.innerHTML=state.projects.map(p=>`<option value="${p.id}">${esc(p.name)} · ${esc(p.client)}</option>`).join('');
+  mmProject.value = sel || state.projects[0].id;
+  mmName.value=''; mmStart.value=rel(0); mmDue.value=rel(14); mmOwner.value=''; mmDeliverable.value='';
+  openOverlay('msOverlay'); mmName.focus();
+}
+function openMsEdit(id){
+  state.editing=id; const m=milestoneById(id); document.getElementById('msModalTitle').textContent='编辑里程碑';
+  mmProject.innerHTML=state.projects.map(p=>`<option value="${p.id}">${esc(p.name)} · ${esc(p.client)}</option>`).join('');
+  mmProject.value=m.projectId;
+  mmName.value=m.name; mmStart.value=m.start||''; mmDue.value=m.due; mmOwner.value=m.owner||''; mmDeliverable.value=m.deliverable||'';
+  openOverlay('msOverlay'); mmName.focus();
+}
+async function saveMs(){
+  const name=mmName.value.trim();
+  if(!name||!mmDue.value){toast('请填写里程碑名称与目标日期');return;}
+  if(mmStart.value && mmStart.value>mmDue.value){toast('开始日期不能晚于目标日期');return;}
+  const data={projectId:+mmProject.value, name, start:mmStart.value, due:mmDue.value, owner:mmOwner.value.trim(), deliverable:mmDeliverable.value.trim()};
+  if(state.editing){ const m=milestoneById(state.editing); Object.assign(m,data); syncUpdate('milestones',m); }
+  else if(APP.online){ try{ state.milestones.push(await apiCreate('milestones',data)); }catch(e){ toast('保存失败：'+e.message); return; } }
+  else state.milestones.push({id:mid++,...data});
+  closeOverlay('msOverlay'); renderAll(); toast('已保存里程碑');
+}
+function delMs(id){
+  if(nodesOfMilestone(id).length){ toast('该里程碑下还有节点，请先在「节点」中移除或改挂其他里程碑'); return; }
+  syncDelete('milestones',id); state.milestones=state.milestones.filter(m=>m.id!==id); renderAll(); toast('已删除里程碑');
+}
+
+// —— 节点行 ——
+function nodeRow(n,r,withControls){
+  const p=projectById(n.projectId);
+  const tCls=r.kind==='done'?'t done':'t';
+  const controls=withControls?`<div class="controls"><select onchange="changeNodeStatus(${n.id},this.value)">${['未开始','进行中','已完成','阻塞'].map(s=>`<option ${s===n.status?'selected':''}>${s}</option>`).join('')}</select><button class="icon-btn" onclick="openNodeEdit(${n.id})">✎</button><button class="icon-btn" onclick="delNode(${n.id})">✕</button></div>`:'';
+  return `<div class="row-item" data-risk="${r.level}"><span class="chip ${r.kind}">${r.label}</span><div class="main"><div class="${tCls}">${esc(n.title)}</div><div class="meta"><span>${esc(n.owner)}</span><span class="mono">截止 ${short(n.due)}</span><span>${esc(p.client)} · ${esc(p.name)}</span><span>${n.status}</span>${n.note?`<span>📌 ${esc(n.note)}</span>`:''}</div></div>${controls}</div>`;
+}
+function renderNodes(){
+  const f=state.filter;
+  let list=state.nodes.filter(n=>{const p=projectById(n.projectId); return (!f.client||p.client===f.client)&&(!f.project||n.projectId===+f.project)&&(!f.owner||n.owner===f.owner)&&(!f.status||n.status===f.status);}).sort((a,b)=>riskRank[nodeRisk(a).level]-riskRank[nodeRisk(b).level]);
+  const box=document.getElementById('nodeList');
+  box.innerHTML=list.length?list.map(n=>nodeRow(n,nodeRisk(n),true)).join(''):`<div class="empty"><b>没有符合条件的节点</b>换个筛选或新建一条。</div>`;
+}
+
+// —— 问题行 ——
+function attachThumbs(arr, issueId, kind){
+  if(!arr||!arr.length) return '';
+  return `<div class="attaches">`+arr.map((a,idx)=>a.type.startsWith('image/')
+    ? `<img class="thumb" src="${a.dataUrl}" title="${esc(a.name)}" onclick="openLightbox(${issueId},'${kind}',${idx})">`
+    : `<span class="file-chip" onclick="downloadAttach(${issueId},'${kind}',${idx})">📎 ${esc(a.name)}</span>`
+  ).join('')+`</div>`;
+}
+function issueRow(i){
+  const tr=issueTimeRisk(i);
+  const open=ISTATUS_OPEN(i.status);
+  const stCls = i.status==='测试不通过'?'st fail' : (open?'st':'st solved');
+  const overdueChip = open&&tr.level==='high' ? `<span class="chip high">⚠ ${tr.label}</span>` : (open&&tr.level==='mid'?`<span class="chip mid">${tr.label}</span>`:'');
+  return `
+  <div class="row-item" data-pri="${i.priority}">
+    <div class="main">
+      <div class="chips">
+        <span class="chip ${i.priority.toLowerCase()}">${i.priority}</span>
+        <span class="chip cat">${esc(i.category)}</span>
+        ${i.subcat?`<span class="chip cat">${esc(i.subcat)}</span>`:''}
+        <span class="chip ${stCls}">${i.status}</span>
+        ${overdueChip}
+        <span class="mono" style="color:var(--muted)">#${i.code}</span>
+      </div>
+      <div class="t" style="margin-top:6px">${esc(i.content)}</div>
+      <div class="meta">
+        <span>🏥 ${esc(i.client)}</span>
+        <span>负责 ${esc(i.owner)}</span>
+        <span class="mono">预计 ${short(i.due)}</span>
+        ${i.solved?`<span class="mono">解决 ${short(i.solved)}</span>`:''}
+        ${i.verify?`<span>验证：${esc(i.verify)}</span>`:''}
+        ${i.note?`<span>📌 ${esc(i.note)}</span>`:''}
+      </div>
+      ${i.solution?`<div class="meta"><span>方案：${esc(i.solution)}</span></div>`:''}
+      ${attachThumbs(i.attaches,i.id,'attach')}
+      ${attachThumbs(i.verifyShots,i.id,'verify')}
+    </div>
+    <div class="controls">
+      <button class="icon-btn" onclick="openIssueEdit(${i.id})">✎</button>
+      <button class="icon-btn" onclick="delIssue(${i.id})">✕</button>
+    </div>
+  </div>`;
+}
+function defaultIssueSort(list){
+  return list.sort((a,b)=>{
+    const oa=ISTATUS_OPEN(a.status), ob=ISTATUS_OPEN(b.status);
+    if(oa!==ob) return oa?-1:1;
+    if(priRank[a.priority]!==priRank[b.priority]) return priRank[a.priority]-priRank[b.priority];
+    return new Date(a.due)-new Date(b.due);
+  });
+}
+function sortedIssues(list){
+  if(!state.isort) return defaultIssueSort(list);
+  const {key,dir}=state.isort;
+  const val=i=>({code:i.code, priority:priRank[i.priority], client:i.client, category:BIGCATS.indexOf(i.category), subcat:(i.subcat?SUBCAT_DEFAULT.indexOf(i.subcat):999), status:ISTATUS.indexOf(i.status), owner:i.owner, due:new Date(i.due).getTime()})[key];
+  return list.slice().sort((a,b)=>{ const va=val(a),vb=val(b); return typeof va==='string'? dir*String(va).localeCompare(String(vb),'zh') : dir*(va-vb); });
+}
+function setSort(key){
+  if(state.isort&&state.isort.key===key) state.isort = state.isort.dir===1 ? {key,dir:-1} : null; // 升→降→默认
+  else state.isort={key,dir:1};
+  renderIssues();
+}
+function sortArrow(key){ return state.isort&&state.isort.key===key ? `<span class="arrow">${state.isort.dir===1?'▲':'▼'}</span>` : ''; }
+
+// 表格中的附件单元格（图片缩略图可点开，文件显示数量）
+function tableAttachCell(i){
+  const imgs=[]; 
+  i.attaches.forEach((a,idx)=>{ if(a.type.startsWith('image/')) imgs.push({idx,kind:'attach'}); });
+  i.verifyShots.forEach((a,idx)=>{ if(a.type.startsWith('image/')) imgs.push({idx,kind:'verify'}); });
+  const fileCount=i.attaches.filter(a=>!a.type.startsWith('image/')).length;
+  const total=i.attaches.length+i.verifyShots.length;
+  if(!total) return '<span style="color:var(--muted)">—</span>';
+  let html='<div class="cell-attach">';
+  imgs.slice(0,2).forEach(x=>{ const src=(x.kind==='attach'?i.attaches:i.verifyShots)[x.idx].dataUrl; html+=`<img src="${src}" onclick="event.stopPropagation();openLightbox(${i.id},'${x.kind}',${x.idx})">`; });
+  const shown=Math.min(imgs.length,2);
+  const rest=total-shown;
+  if(fileCount&&imgs.length<=2) html+=`<span class="more">📎${fileCount}</span>`;
+  if(rest>fileCount) html+=`<span class="more">+${rest-fileCount}</span>`;
+  html+='</div>';
+  return html;
+}
+function issueTableRow(i){
+  const tr=issueTimeRisk(i); const open=ISTATUS_OPEN(i.status);
+  const stCls=i.status==='测试不通过'?'st fail':(open?'st':'st solved');
+  let dueCls=''; if(open&&tr.level==='high') dueCls='due-over'; else if(open&&tr.level==='mid') dueCls='due-near';
+  return `<tr class="irow" data-pri="${i.priority}" onclick="openIssueEdit(${i.id})">
+    <td class="col-num mono">#${i.code}</td>
+    <td><span class="chip ${i.priority.toLowerCase()}">${i.priority}</span></td>
+    <td class="cell-content"><div class="clamp">${esc(i.content)}</div></td>
+    <td>${esc(i.client)}</td>
+    <td><span class="chip cat">${esc(i.category)}</span></td>
+    <td>${i.subcat?`<span class="chip cat">${esc(i.subcat)}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+    <td><span class="chip ${stCls}">${i.status}</span></td>
+    <td>${esc(i.owner)}</td>
+    <td class="mono ${dueCls}">${short(i.due)}${open&&tr.level==='high'?' ⚠':''}</td>
+    <td class="col-optional">${i.verify?esc(i.verify):'<span style="color:var(--muted)">—</span>'}</td>
+    <td>${tableAttachCell(i)}</td>
+    <td class="ops-cell"><button class="icon-btn" onclick="event.stopPropagation();openIssueEdit(${i.id})">✎</button> <button class="icon-btn" onclick="event.stopPropagation();delIssue(${i.id})">✕</button></td>
+  </tr>`;
+}
+function issueTableHTML(list){
+  const th=(key,label,opt)=>`<th class="sortable${opt?' col-optional':''}" onclick="setSort('${key}')">${label}${sortArrow(key)}</th>`;
+  return `<div class="table-wrap"><table class="grid">
+    <thead><tr>
+      ${th('code','编号')}
+      ${th('priority','优先级')}
+      <th>问题内容</th>
+      ${th('client','医院')}
+      ${th('category','大类')}
+      ${th('subcat','细分类')}
+      ${th('status','状态')}
+      ${th('owner','负责人')}
+      ${th('due','预计解决')}
+      <th class="col-optional">验证</th>
+      <th>附件</th>
+      <th>操作</th>
+    </tr></thead>
+    <tbody>${list.map(issueTableRow).join('')}</tbody>
+  </table></div>`;
+}
+function currentIssueList(){
+  const f=state.ifilter;
+  const list=state.issues.filter(i=>(!f.client||i.client===f.client)&&(!f.owner||i.owner===f.owner)&&(!f.priority||i.priority===f.priority)&&(!f.category||i.category===f.category)&&(!f.subcat||i.subcat===f.subcat)&&(!f.status||i.status===f.status));
+  return sortedIssues(list);
+}
+function renderIssues(){
+  const list=currentIssueList();
+  const box=document.getElementById('issueList');
+  if(!list.length){ box.innerHTML=`<div class="empty"><b>没有符合条件的问题</b>换个筛选，或点「记录问题」新增。</div>`; return; }
+  box.innerHTML = state.issueView==='table' ? issueTableHTML(list) : list.map(issueRow).join('');
+}
+// CSV 转义：含逗号/引号/换行的字段用双引号包裹，内部引号翻倍
+function csvEscape(v){ v=(v==null)?'':String(v); return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+// 导出当前筛选后的问题清单为 CSV（默认不含附件；勾选则附带文件名，仍不含文件本体）
+function exportIssuesCSV(){
+  const list=currentIssueList();
+  if(!list.length){ toast('当前筛选下没有问题可导出'); return; }
+  const withNames=document.getElementById('exportAttachNames').checked;
+  const headers=['编号','问题内容','医院','优先级','问题大类','细分类','状态','负责人','预计解决时间','实际解决时间','验证结论','处理方案','备注','创建人','提出人'];
+  if(withNames) headers.push('附件文件名');
+  const rows=list.map(i=>{
+    const r=[i.code,i.content,i.client,i.priority,i.category,i.subcat||'',i.status,i.owner,i.due,i.solved||'',i.verify||'',i.solution||'',i.note||'',i.creator||'',i.proposer||''];
+    if(withNames) r.push([...i.attaches,...i.verifyShots].map(a=>a.name).join('; '));
+    return r;
+  });
+  const csv=[headers,...rows].map(r=>r.map(csvEscape).join(',')).join('\r\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`问题清单_${fmt(today)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast(`已导出 ${list.length} 条问题`+(withNames?'（含附件文件名，不含文件本体）':'（不含附件）'));
+}
+
+// —— 下拉填充 ——
+function opt(arr,cur){return arr.map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('');}
+function refreshSelectors(){
+  const clients=allClients(), owners=allOwners();
+  document.getElementById('fClient').innerHTML=`<option value="">全部客户</option>`+opt([...new Set(state.projects.map(p=>p.client))],state.filter.client);
+  document.getElementById('fOwner').innerHTML=`<option value="">全部成员</option>`+opt([...new Set(state.nodes.map(n=>n.owner))],state.filter.owner);
+  fillProjects('fProject',state.filter.project,'全部项目');
+  fillProjects('msProject',document.getElementById('msProject').value,'全部项目');
+  // 问题筛选
+  document.getElementById('iClient').innerHTML=`<option value="">全部医院</option>`+opt(clients,state.ifilter.client);
+  document.getElementById('iOwner').innerHTML=`<option value="">全部负责人</option>`+opt([...new Set(state.issues.map(i=>i.owner))],state.ifilter.owner);
+  document.getElementById('iCategory').innerHTML=`<option value="">全部大类</option>`+opt(BIGCATS,state.ifilter.category);
+  document.getElementById('iSubcat').innerHTML=`<option value="">全部细分类</option>`+opt(SUBCAT_DEFAULT,state.ifilter.subcat);
+  document.getElementById('iStatus').innerHTML=`<option value="">全部状态</option>`+opt(ISTATUS,state.ifilter.status);
+  // 生成范围（客户 + 项目）
+  fillScope();
+  // datalist
+  document.getElementById('clientList').innerHTML=clients.map(c=>`<option value="${esc(c)}">`).join('');
+  document.getElementById('ownerList').innerHTML=owners.map(o=>`<option value="${esc(o)}">`).join('');
+}
+function fillProjects(id,cur,ph){
+  const s=document.getElementById(id);
+  s.innerHTML=`<option value="">${ph}</option>`+state.projects.map(p=>`<option value="${p.id}" ${String(cur)===String(p.id)?'selected':''}>项目 · ${esc(p.name)}</option>`).join('');
+}
+function fillScope(){
+  const s=document.getElementById('genScope'); const cur=s.value;
+  let html=`<option value="">全部范围</option>`;
+  allClients().forEach(c=>{html+=`<option value="client:${esc(c)}" ${cur==='client:'+c?'selected':''}>医院 · ${esc(c)}</option>`;});
+  state.projects.forEach(p=>{html+=`<option value="proj:${p.id}" ${cur==='proj:'+p.id?'selected':''}>项目 · ${esc(p.name)}</option>`;});
+  s.innerHTML=html;
+}
+
+// —— 生成清单 ——
+function truncate(s,n){return s.length>n?s.slice(0,n)+'…':s;}
+function generate(){
+  const source=document.getElementById('genSource').value;
+  const scope=document.getElementById('genScope').value;
+  const tf=document.getElementById('genTime').value;
+  const matchClient=c=>!scope||(scope.startsWith('client:')&&scope.slice(7)===c);
+  const matchProj=pidv=>!scope||(scope.startsWith('proj:')&&+scope.slice(5)===pidv);
+
+  // 收集每人条目
+  const groups={};
+  const add=(owner,obj)=>{(groups[owner]||=[]).push(obj);};
+
+  if(source!=='node'){
+    state.issues.filter(i=>ISTATUS_OPEN(i.status)).forEach(i=>{
+      if(scope.startsWith('client:')&&!matchClient(i.client)) return;
+      if(scope.startsWith('proj:')){ const p=projectById(+scope.slice(5)); if(!p||p.client!==i.client) return; }
+      if(!inTimeframe(i.due,tf)) return;
+      add(i.owner,{type:'issue',i,tr:issueTimeRisk(i)});
+    });
+  }
+  if(source!=='issue'){
+    state.nodes.filter(n=>n.status!=='已完成').forEach(n=>{
+      const p=projectById(n.projectId);
+      if(scope.startsWith('client:')&&!matchClient(p.client)) return;
+      if(scope.startsWith('proj:')&&!matchProj(n.projectId)) return;
+      if(!inTimeframe(n.due,tf)) return;
+      add(n.owner,{type:'node',n,r:nodeRisk(n)});
+    });
+  }
+
+  const tfLabel={all:'全部待办',today:'今日到期',week:'本周到期',month:'本月到期'}[tf];
+  let scopeLabel='全部范围';
+  if(scope.startsWith('client:')) scopeLabel='医院·'+scope.slice(7);
+  else if(scope.startsWith('proj:')) scopeLabel='项目·'+projectById(+scope.slice(5)).name;
+
+  let out=`📋 任务清单 · ${scopeLabel} · ${tfLabel}\n🗓 ${fmt(today)} ${weekdayCN}\n━━━━━━━━━━━━━━\n`;
+  const owners=Object.keys(groups);
+  if(!owners.length){ out+=`（当前范围内没有待办）\n`; }
+  else{
+    owners.forEach(owner=>{
+      const items=groups[owner].sort((a,b)=>{
+        const pa=a.type==='issue'?priRank[a.i.priority]:1.5, pb=b.type==='issue'?priRank[b.i.priority]:1.5;
+        return pa-pb;
+      });
+      out+=`\n👤 ${owner}\n`;
+      items.forEach(it=>{
+        if(it.type==='issue'){
+          const i=it.i; const emo={P0:'🔴',P1:'🟠',P2:'🟡',P3:'⚪'}[i.priority];
+          const od=it.tr.level==='high'?'⚠️逾期 ':'';
+          out+=`${emo}${od}[${i.client}·问题#${i.code}] ${truncate(i.content,38)} · 预计${short(i.due)} · ${i.status}\n`;
+        }else{
+          const n=it.n; const p=projectById(n.projectId);
+          let mark='· '; const r=it.r;
+          if(r.kind==='blocked') mark='🚫【阻塞】'; else if(r.level==='high') mark='⚠️【'+r.label+'】'; else if(r.level==='mid') mark='🟡【'+r.label+'】';
+          out+=`${mark}[${p.client}·${p.name}] ${n.title} · 截止${short(n.due)} · ${n.status}\n`;
+        }
+      });
+    });
+  }
+  // 全队风险
+  const openIssues=state.issues.filter(i=>ISTATUS_OPEN(i.status));
+  const p0=openIssues.filter(i=>i.priority==='P0').length;
+  const odI=openIssues.filter(i=>issueTimeRisk(i).level==='high').length;
+  const blk=state.nodes.filter(n=>n.status==='阻塞').length;
+  out+=`\n━━━━━━━━━━━━━━\n📊 全队风险：P0 ${p0} · 逾期问题 ${odI} · 阻塞节点 ${blk}\n`;
+  out+=(p0||odI||blk)?`👉 请 P0 / 逾期 / 阻塞 负责人今日同步进展与卡点`:`👍 当前无 P0 与逾期，按节奏推进即可`;
+  document.getElementById('genOut').value=out;
+}
+
+// —— 节点交互 ——
+function changeNodeStatus(id,status){const n=state.nodes.find(x=>x.id===id); if(n){n.status=status; syncUpdate('nodes',n); renderAll();}}
+function delNode(id){syncDelete('nodes',id); state.nodes=state.nodes.filter(x=>x.id!==id); renderAll(); toast('已删除节点');}
+function gotoProject(id){document.querySelector('.nav-item[data-view="milestones"]').click(); document.getElementById('msProject').value=id; renderMilestones();}
+function gotoIssuesByOwner(owner){
+  document.querySelector('.nav-item[data-view="issues"]').click();
+  state.ifilter.owner=owner; document.getElementById('iOwner').value=owner; renderIssues();
+}
+function milestoneOptions(projectId,current){return milestonesOfProject(projectId).map(m=>`<option value="${m.id}" ${m.id===current?'selected':''}>${esc(m.name)}</option>`).join('');}
+function openNodeAdd(){
+  state.editing=null; document.getElementById('nodeModalTitle').textContent='新建节点';
+  const p0=state.projects[0];
+  nProject.innerHTML=state.projects.map(p=>`<option value="${p.id}">${esc(p.name)} · ${esc(p.client)}</option>`).join(''); nProject.value=p0.id;
+  nMilestone.innerHTML=milestoneOptions(p0.id);
+  nTitle.value=''; nOwner.value=''; nDue.value=rel(7); nStatus.value='进行中'; nNote.value='';
+  openOverlay('nodeOverlay'); nTitle.focus();
+}
+function openNodeEdit(id){
+  state.editing=id; const n=state.nodes.find(x=>x.id===id); document.getElementById('nodeModalTitle').textContent='编辑节点';
+  nProject.innerHTML=state.projects.map(p=>`<option value="${p.id}">${esc(p.name)} · ${esc(p.client)}</option>`).join(''); nProject.value=n.projectId;
+  nMilestone.innerHTML=milestoneOptions(n.projectId,n.milestoneId);
+  nTitle.value=n.title; nOwner.value=n.owner; nDue.value=n.due; nStatus.value=n.status; nNote.value=n.note||'';
+  openOverlay('nodeOverlay'); nTitle.focus();
+}
+document.getElementById('nProject').addEventListener('change',e=>{nMilestone.innerHTML=milestoneOptions(+e.target.value);});
+async function saveNode(){
+  const data={projectId:+nProject.value,milestoneId:+nMilestone.value,title:nTitle.value.trim(),owner:nOwner.value.trim(),due:nDue.value,status:nStatus.value,note:nNote.value.trim()};
+  if(!data.title||!data.owner||!data.due){toast('请填写节点名称、负责人、截止日期');return;}
+  if(state.editing){ const n=state.nodes.find(x=>x.id===state.editing); Object.assign(n,data); syncUpdate('nodes',n); }
+  else if(APP.online){ try{ state.nodes.push(await apiCreate('nodes',data)); }catch(e){ toast('保存失败：'+e.message); return; } }
+  else state.nodes.push({id:nid++,...data});
+  closeOverlay('nodeOverlay'); renderAll(); toast('已保存节点');
+}
+
+// —— 问题交互 ——
+function delIssue(id){syncDelete('issues',id); state.issues=state.issues.filter(x=>x.id!==id); renderAll(); toast('已删除问题');}
+function renderPreviews(){
+  const r=(arr,kind)=>arr.map((a,idx)=>a.type.startsWith('image/')
+    ? `<div class="preview-item"><img class="thumb" src="${a.dataUrl}"><button class="del" onclick="removeTemp('${kind}',${idx})">×</button></div>`
+    : `<div class="preview-item"><span class="file-chip">📎 ${esc(a.name)}</span><button class="del" onclick="removeTemp('${kind}',${idx})">×</button></div>`).join('');
+  document.getElementById('iAttachPreview').innerHTML=r(tempAttach,'attach');
+  document.getElementById('iVerifyPreview').innerHTML=r(tempVerify,'verify');
+}
+function removeTemp(kind,idx){ (kind==='attach'?tempAttach:tempVerify).splice(idx,1); renderPreviews(); }
+function readFiles(files,target,cb){
+  let pending=files.length; if(!pending){cb();return;}
+  Array.from(files).forEach(file=>{
+    const reader=new FileReader();
+    const fallback=(file.type&&file.type.startsWith('image/'))?('粘贴图片_'+Date.now()+'.png'):('附件_'+Date.now());
+    reader.onload=e=>{ target.push({name:file.name||fallback,type:file.type||'application/octet-stream',dataUrl:e.target.result}); if(--pending===0) cb(); };
+    reader.readAsDataURL(file);
+  });
+}
+// 当前粘贴目标投放区（attach / verify）
+let pasteTarget='attach';
+function setActiveZone(t){
+  pasteTarget=t;
+  const a=document.getElementById('attachZone'), v=document.getElementById('verifyZone');
+  if(a) a.classList.toggle('active',t==='attach');
+  if(v) v.classList.toggle('active',t==='verify');
+}
+function openIssueAdd(){
+  state.editing=null; document.getElementById('issueModalTitle').textContent='记录问题';
+  iCat.innerHTML=opt(BIGCATS,'算法需求'); fillSubcat(iSub,'算法需求',''); iStat.innerHTML=opt(ISTATUS,'待排查');
+  iContent.value=''; iClientIn.value=''; iPri.value='P1'; iOwnerIn.value=''; iDue.value=rel(7); // 预计解决默认＝创建后一周
+  iSolution.value=''; iSolved.value=''; iVerify.value=''; iNote.value=''; iCreator.value=''; iProposer.value='';
+  tempAttach=[]; tempVerify=[]; renderPreviews();
+  document.getElementById('hiddenFields').classList.remove('show');
+  setActiveZone('attach');
+  openOverlay('issueOverlay'); iContent.focus();
+}
+function openIssueEdit(id){
+  state.editing=id; const i=state.issues.find(x=>x.id===id); document.getElementById('issueModalTitle').textContent=`编辑问题 #${i.code}`;
+  iCat.innerHTML=opt(BIGCATS,i.category); fillSubcat(iSub,i.category,i.subcat||''); iStat.innerHTML=opt(ISTATUS,i.status);
+  iContent.value=i.content; iClientIn.value=i.client; iPri.value=i.priority; iOwnerIn.value=i.owner; iDue.value=i.due;
+  iSolution.value=i.solution||''; iSolved.value=i.solved||''; iVerify.value=i.verify||''; iNote.value=i.note||''; iCreator.value=i.creator||''; iProposer.value=i.proposer||'';
+  tempAttach=i.attaches.slice(); tempVerify=i.verifyShots.slice(); renderPreviews();
+  document.getElementById('hiddenFields').classList.toggle('show', !!(i.creator||i.proposer));
+  setActiveZone('attach');
+  openOverlay('issueOverlay'); iContent.focus();
+}
+async function saveIssue(){
+  const content=iContent.value.trim(), client=iClientIn.value.trim(), owner=iOwnerIn.value.trim();
+  if(!content||!client||!owner||!iDue.value){toast('请填写问题内容、医院、负责人、预计解决时间');return;}
+  const data={content,client,owner,priority:iPri.value,category:iCat.value,subcat:iSub.value,status:iStat.value,due:iDue.value,
+    solution:iSolution.value.trim(),solved:iSolved.value,verify:iVerify.value,note:iNote.value.trim(),
+    creator:iCreator.value.trim(),proposer:iProposer.value.trim(),attaches:tempAttach.slice(),verifyShots:tempVerify.slice()};
+  if(data.status==='已解决' && !data.solved) data.solved=fmt(today); // 已解决自动补当天
+  if(state.editing){ const it=state.issues.find(x=>x.id===state.editing); Object.assign(it,data); syncUpdate('issues',it); }
+  else{ const code=Math.max(0,...state.issues.map(i=>i.code))+1;
+    if(APP.online){ try{ const created=await apiCreate('issues',{code,...data}); state.issues.push({...created, attaches:data.attaches||[], verifyShots:data.verifyShots||[]}); }catch(e){ toast('保存失败：'+e.message); return; } }
+    else state.issues.push({id:iid++,code,...data}); }
+  closeOverlay('issueOverlay'); renderAll(); toast('已保存问题');
+}
+
+// —— 灯箱 / 下载 ——
+function lookupAttach(issueId,kind,idx){const i=state.issues.find(x=>x.id===issueId); return i?(kind==='attach'?i.attaches:i.verifyShots)[idx]:null;}
+function openLightbox(issueId,kind,idx){const a=lookupAttach(issueId,kind,idx); if(!a)return; document.getElementById('lbImg').src=a.dataUrl; document.getElementById('lbName').textContent=a.name; document.getElementById('lightbox').classList.add('open');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+function downloadAttach(issueId,kind,idx){const a=lookupAttach(issueId,kind,idx); if(!a)return; const link=document.createElement('a'); link.href=a.dataUrl; link.download=a.name; link.click();}
+
+// —— 渲染入口 ——
+function renderAll(){ renderTiles(); renderOverview(); refreshSelectors(); renderMilestones(); renderNodes(); renderIssues(); generate(); }
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+let toastTimer; function toast(msg){const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),1800);}
+function openOverlay(id){document.getElementById(id).classList.add('open');}
+function closeOverlay(id){document.getElementById(id).classList.remove('open');}
+
+// —— 事件 ——
+document.querySelectorAll('.nav-item').forEach(tab=>tab.addEventListener('click',()=>{
+  document.querySelectorAll('.nav-item').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  tab.classList.add('active'); document.getElementById('view-'+tab.dataset.view).classList.add('active');
+  document.getElementById('app').classList.remove('expanded-mobile'); // 移动端选完自动收起浮层
+}));
+// 侧栏展开/收起
+document.getElementById('sideToggle').addEventListener('click',()=>{
+  const app=document.getElementById('app');
+  if(window.innerWidth<=720){ app.classList.toggle('expanded-mobile'); }
+  else{ app.classList.toggle('collapsed'); }
+});
+// 窄屏默认折叠为图标栏
+if(window.innerWidth<=720){ document.getElementById('app').classList.add('collapsed'); }
+document.querySelectorAll('#dimSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#dimSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); state.dimension=b.dataset.dim; renderOverview();
+}));
+document.querySelectorAll('#tfSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tfSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); state.tf=b.dataset.tf; renderOverview();
+}));
+document.getElementById('msProject').addEventListener('change',renderMilestones);
+document.getElementById('fClient').addEventListener('change',e=>{state.filter.client=e.target.value; renderNodes();});
+document.getElementById('fProject').addEventListener('change',e=>{state.filter.project=e.target.value; renderNodes();});
+document.getElementById('fOwner').addEventListener('change',e=>{state.filter.owner=e.target.value; renderNodes();});
+document.getElementById('fStatus').addEventListener('change',e=>{state.filter.status=e.target.value; renderNodes();});
+document.getElementById('iClient').addEventListener('change',e=>{state.ifilter.client=e.target.value; renderIssues();});
+document.getElementById('iOwner').addEventListener('change',e=>{state.ifilter.owner=e.target.value; renderIssues();});
+document.getElementById('iPriority').addEventListener('change',e=>{state.ifilter.priority=e.target.value; renderIssues();});
+document.getElementById('iCategory').addEventListener('change',e=>{state.ifilter.category=e.target.value; renderIssues();});
+document.getElementById('iSubcat').addEventListener('change',e=>{state.ifilter.subcat=e.target.value; renderIssues();});
+// 弹窗内大类改变时，细分类联动重置
+document.getElementById('iCat').addEventListener('change',e=>fillSubcat(iSub,e.target.value,''));
+document.getElementById('iStatus').addEventListener('change',e=>{state.ifilter.status=e.target.value; renderIssues();});
+document.getElementById('addNodeBtn').addEventListener('click',openNodeAdd);
+document.getElementById('saveNodeBtn').addEventListener('click',saveNode);
+document.getElementById('addMsBtn').addEventListener('click',openMsAdd);
+document.getElementById('saveMsBtn').addEventListener('click',saveMs);
+document.getElementById('expandAllBtn').addEventListener('click',()=>setExpandAll(true));
+document.getElementById('collapseAllBtn').addEventListener('click',()=>setExpandAll(false));
+document.getElementById('addIssueBtn').addEventListener('click',openIssueAdd);
+document.getElementById('exportBtn').addEventListener('click',exportIssuesCSV);
+document.querySelectorAll('#issueViewSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#issueViewSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); state.issueView=b.dataset.iview; renderIssues();
+}));
+document.getElementById('saveIssueBtn').addEventListener('click',saveIssue);
+// 状态改为「已解决」时，自动填入当天为实际解决时间（仅当未填）
+document.getElementById('iStat').addEventListener('change',e=>{
+  if(e.target.value==='已解决' && !iSolved.value){ iSolved.value=fmt(today); toast('已自动填入实际解决时间：今天'); }
+});
+document.getElementById('toggleHidden').addEventListener('click',()=>document.getElementById('hiddenFields').classList.toggle('show'));
+document.getElementById('iAttachInput').addEventListener('change',e=>{readFiles(e.target.files,tempAttach,renderPreviews); e.target.value='';});
+document.getElementById('iVerifyInput').addEventListener('change',e=>{readFiles(e.target.files,tempVerify,renderPreviews); e.target.value='';});
+// 投放区：点击/聚焦切换粘贴目标，支持拖拽
+['attachZone','verifyZone'].forEach(zid=>{
+  const z=document.getElementById(zid); if(!z) return; const tname=z.dataset.target;
+  const arr=()=>tname==='attach'?tempAttach:tempVerify;
+  z.addEventListener('mousedown',()=>setActiveZone(tname));
+  z.addEventListener('focus',()=>setActiveZone(tname));
+  z.addEventListener('dragover',e=>{e.preventDefault(); z.classList.add('dragover');});
+  z.addEventListener('dragleave',e=>{ if(!z.contains(e.relatedTarget)) z.classList.remove('dragover'); });
+  z.addEventListener('drop',e=>{e.preventDefault(); z.classList.remove('dragover'); setActiveZone(tname);
+    const f=e.dataTransfer&&e.dataTransfer.files; if(f&&f.length){ readFiles(f,arr(),renderPreviews); toast(f.length+' 个文件已添加到'+(tname==='attach'?'附件':'验证截图')); }});
+});
+// 弹窗内防止误拖拽导致浏览器打开文件
+const issueOv=document.getElementById('issueOverlay');
+issueOv.addEventListener('dragover',e=>e.preventDefault());
+issueOv.addEventListener('drop',e=>e.preventDefault());
+// 全局粘贴：仅当问题弹窗打开且剪贴板含文件/图片时拦截，文本粘贴不受影响
+document.addEventListener('paste',e=>{
+  if(!issueOv.classList.contains('open')) return;
+  const items=(e.clipboardData&&e.clipboardData.items)||[];
+  const files=[];
+  for(const it of items){ if(it.kind==='file'){ const f=it.getAsFile(); if(f) files.push(f); } }
+  if(!files.length) return; // 纯文本：交给默认行为
+  e.preventDefault();
+  const target=pasteTarget==='attach'?tempAttach:tempVerify;
+  readFiles(files,target,renderPreviews);
+  toast(files.length+' 个文件已粘贴到'+(pasteTarget==='attach'?'附件':'验证截图'));
+});
+['genSource','genScope','genTime'].forEach(id=>document.getElementById(id).addEventListener('change',generate));
+document.getElementById('genBtn').addEventListener('click',generate);
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+  const text=document.getElementById('genOut').value;
+  try{await navigator.clipboard.writeText(text); toast('已复制，去飞书群粘贴吧');}
+  catch{const ta=document.getElementById('genOut'); ta.select(); document.execCommand('copy'); toast('已复制');}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeOverlay('nodeOverlay'); closeOverlay('issueOverlay'); closeOverlay('msOverlay'); closeLightbox();}});
+['nodeOverlay','msOverlay'].forEach(id=>document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);}));
+document.getElementById('lightbox').addEventListener('click',e=>{if(e.target.id==='lightbox')closeLightbox();});
+
+// ======================= 多人协作 · 鉴权与数据同步层 =======================
+const APP={online:false,user:null,token:null,poll:null};
+let authMode='login';
+const DEMO_SNAPSHOT={
+  projects:JSON.parse(JSON.stringify(state.projects)),
+  milestones:JSON.parse(JSON.stringify(state.milestones)),
+  nodes:JSON.parse(JSON.stringify(state.nodes)),
+  issues:JSON.parse(JSON.stringify(state.issues)).map(i=>({...i,attaches:[],verifyShots:[]})),
+};
+function lsGet(k){try{return localStorage.getItem(k);}catch{return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch{}}
+function lsDel(k){try{localStorage.removeItem(k);}catch{}}
+const API={
+  async req(method,path,body){
+    const headers={'content-type':'application/json'};
+    if(APP.token) headers['Authorization']='Bearer '+APP.token;
+    const res=await fetch('/api'+path,{method,headers,body:body?JSON.stringify(body):undefined});
+    let data=null; try{data=await res.json();}catch{}
+    if(!res.ok) throw new Error((data&&data.error)||('请求失败 '+res.status));
+    return data;
+  },
+  get(p){return this.req('GET',p);}, post(p,b){return this.req('POST',p,b);},
+  patch(p,b){return this.req('PATCH',p,b);}, del(p){return this.req('DELETE',p);},
+};
+function stripForSync(table,obj){ const o={...obj}; delete o.id; if(table==='issues'){o.attaches=[];o.verifyShots=[];} return o; }
+async function apiCreate(table,data){ return API.post('/'+table, stripForSync(table,data)); }
+function syncUpdate(table,obj){ if(!APP.online) return; API.patch('/'+table+'/'+obj.id, stripForSync(table,obj)).catch(e=>toast('同步失败：'+e.message)); }
+function syncDelete(table,id){ if(!APP.online) return; API.del('/'+table+'/'+id).catch(e=>toast('同步失败：'+e.message)); }
+function applyState(s){
+  const att={}; (state.issues||[]).forEach(i=>{att[i.id]={a:i.attaches||[],v:i.verifyShots||[]};});
+  state.projects=s.projects||[]; state.milestones=s.milestones||[]; state.nodes=s.nodes||[];
+  state.issues=(s.issues||[]).map(i=>({...i, attaches:(att[i.id]&&att[i.id].a)||[], verifyShots:(att[i.id]&&att[i.id].v)||[]}));
+  state.users=s.users||[];
+}
+async function loadState(){ const s=await API.get('/state'); applyState(s); renderAll(); }
+function authErr(msg){ const e=document.getElementById('authError'); e.textContent=msg||''; e.classList.toggle('show',!!msg); }
+function showAuth(mode){
+  authMode=mode; const su=mode==='signup';
+  document.getElementById('authNameField').style.display=su?'block':'none';
+  document.getElementById('authSubmit').textContent=su?'注册':'登录';
+  document.getElementById('authSwitchText').textContent=su?'已有账号？':'还没有账号？';
+  document.getElementById('authToggle').textContent=su?'去登录':'注册';
+  document.getElementById('authSub').textContent=su?'注册账号（首位用户将成为管理员）':'登录以查看与协作项目进度';
+  authErr(''); document.getElementById('authOverlay').classList.add('open');
+  setTimeout(()=>{try{document.getElementById('authEmail').focus();}catch{}},50);
+}
+async function authSubmit(){
+  const email=document.getElementById('authEmail').value.trim();
+  const pwd=document.getElementById('authPwd').value;
+  const name=document.getElementById('authName').value.trim();
+  if(!email||!pwd){ authErr('请输入邮箱和密码'); return; }
+  try{
+    const r=await API.post(authMode==='signup'?'/signup':'/login', authMode==='signup'?{email,password:pwd,name}:{email,password:pwd});
+    APP.token=r.token; APP.user=r.user; APP.online=true; lsSet('pm_token',r.token);
+    document.getElementById('authOverlay').classList.remove('open');
+    await loadState(); afterLogin();
+  }catch(e){ authErr(e.message); }
+}
+function enterDemo(){ APP.online=false; APP.user=null; document.getElementById('authOverlay').classList.remove('open'); renderAll(); afterLogin(); toast('演示模式：数据仅本地，刷新即重置'); }
+function logout(){ APP.token=null; APP.online=false; lsDel('pm_token'); if(APP.poll) clearInterval(APP.poll); location.reload(); }
+function afterLogin(){
+  document.getElementById('suName').textContent = APP.online ? (APP.user.name||APP.user.email) : '演示模式';
+  const roleCN={admin:'管理员',member:'成员',viewer:'访客'};
+  document.getElementById('suRole').textContent = APP.online ? (roleCN[APP.user.role]||APP.user.role) : '本地·不保存';
+  document.getElementById('logoutBtn').style.display='inline';
+  document.getElementById('membersBtn').style.display=(APP.online&&APP.user.role==='admin')?'inline':'none';
+  const isViewer=APP.online&&APP.user.role==='viewer';
+  ['addNodeBtn','addIssueBtn','addMsBtn'].forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=isViewer?'none':'';});
+  const empty=!state.projects.length&&!state.issues.length&&!state.milestones.length;
+  document.getElementById('seedBtn').style.display=(APP.online&&APP.user.role!=='viewer'&&empty)?'inline':'none';
+  if(APP.online){ if(APP.poll) clearInterval(APP.poll); APP.poll=setInterval(()=>{ if(document.visibilityState==='visible') loadState().then(()=>{ const emp=!state.projects.length&&!state.issues.length&&!state.milestones.length; document.getElementById('seedBtn').style.display=(APP.user.role!=='viewer'&&emp)?'inline':'none'; }).catch(()=>{}); },20000); }
+}
+async function seedDemo(){
+  if(!(APP.online&&APP.user.role!=='viewer')) return;
+  if(state.projects.length||state.issues.length){ toast('已有数据，未重复载入'); return; }
+  toast('正在载入示例数据…');
+  try{
+    const pmap={}, mmap={};
+    for(const p of DEMO_SNAPSHOT.projects){ const np=await API.post('/projects',{name:p.name,client:p.client}); pmap[p.id]=np.id; }
+    for(const m of DEMO_SNAPSHOT.milestones){ const o={...m}; delete o.id; o.projectId=pmap[m.projectId]; const nm=await API.post('/milestones',o); mmap[m.id]=nm.id; }
+    for(const n of DEMO_SNAPSHOT.nodes){ const o={...n}; delete o.id; o.projectId=pmap[n.projectId]; o.milestoneId=mmap[n.milestoneId]; await API.post('/nodes',o); }
+    for(const i of DEMO_SNAPSHOT.issues){ const o={...i}; delete o.id; o.attaches=[]; o.verifyShots=[]; await API.post('/issues',o); }
+    await loadState(); afterLogin(); toast('示例数据已载入');
+  }catch(e){ toast('载入失败：'+e.message); }
+}
+async function openMembers(){
+  openOverlay('membersOverlay');
+  const box=document.getElementById('membersList'); box.innerHTML='<div class="empty">加载中…</div>';
+  try{
+    const us=await API.get('/users');
+    box.innerHTML=us.map(u=>`<div class="members-row"><div><div class="mr-name">${esc(u.name||u.email)}</div><div class="mr-mail">${esc(u.email)}</div></div><select onchange="setRole(${u.id},this.value)"><option value="admin" ${u.role==='admin'?'selected':''}>管理员</option><option value="member" ${u.role==='member'?'selected':''}>成员</option><option value="viewer" ${u.role==='viewer'?'selected':''}>访客</option></select></div>`).join('');
+  }catch(e){ box.innerHTML='<div class="empty">加载失败：'+esc(e.message)+'</div>'; }
+}
+async function setRole(id,role){ try{ await API.patch('/users/'+id,{role}); toast('已更新角色'); }catch(e){ toast('更新失败：'+e.message); } }
+async function boot(){
+  APP.token=lsGet('pm_token');
+  if(APP.token){
+    try{ const me=await API.get('/me'); APP.user=me.user; APP.online=true; await loadState(); afterLogin(); return; }
+    catch(e){ APP.token=null; lsDel('pm_token'); }
+  }
+  showAuth('login');
+}
+document.getElementById('authSubmit').addEventListener('click',authSubmit);
+document.getElementById('authPwd').addEventListener('keydown',e=>{if(e.key==='Enter')authSubmit();});
+document.getElementById('authToggle').addEventListener('click',()=>showAuth(authMode==='signup'?'login':'signup'));
+document.getElementById('authDemo').addEventListener('click',enterDemo);
+document.getElementById('logoutBtn').addEventListener('click',logout);
+document.getElementById('membersBtn').addEventListener('click',openMembers);
+document.getElementById('seedBtn').addEventListener('click',seedDemo);
+
+boot();
+</script>
+</body>
+</html>
