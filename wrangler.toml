@@ -6,4 +6,4 @@ compatibility_date = "2024-09-23"
 [[d1_databases]]
 binding = "DB"
 database_name = "delivery-pm-db"
-database_id = "在这里填入你的 D1 database_id"
+database_id = "a38ada54-1be2-42c2-b1b1-f12f0d63667d"
