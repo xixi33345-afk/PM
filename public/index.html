@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#FFFDFC">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="manifest" href="/manifest.json">
-<title>个人项目驾驶舱 · 今日 / 项目 / 问题 / 复盘</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<title>循迹 · 个人项目手帐</title>
 <style>
   :root{
     --bg:#F7F7F4; --surface:#FFFFFF; --ink:#403B3E; --muted:#777074;
@@ -34,7 +36,7 @@
   .app.collapsed .side-toggle{margin:12px auto 4px;}
   .side-brand{display:flex; align-items:center; gap:10px; padding:8px 14px 14px;}
   .app.collapsed .side-brand{justify-content:center; padding:8px 0 14px;}
-  .brand-mark{width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,#E68FB0,#C95482); color:#fff; box-shadow:0 6px 16px rgba(201,84,130,.22); display:grid; place-items:center; font-weight:700; flex:none; font-size:15px;}
+  .brand-mark{width:30px; height:30px; border-radius:9px; background:#FFFDFC; box-shadow:0 4px 12px rgba(74,55,62,.12); display:block; object-fit:cover; flex:none;}
   .side-brand .name{font-weight:700; font-size:15px; letter-spacing:-.01em; white-space:nowrap;}
   .app.collapsed .side-brand .name{display:none;}
   .side-nav{display:flex; flex-direction:column; gap:2px; padding:6px 10px; flex:1; overflow-y:auto;}
@@ -427,7 +429,7 @@
 <div class="app" id="app">
   <aside class="sidebar">
     <button class="side-toggle" id="sideToggle" title="展开 / 收起导航" aria-label="展开或收起导航">☰</button>
-    <div class="side-brand"><div class="brand-mark">驾</div><div class="name">项目驾驶舱</div></div>
+    <div class="side-brand"><img class="brand-mark" src="./icon-192.png" alt=""><div class="name">循迹</div></div>
     <nav class="side-nav">
       <button class="nav-item active" data-view="overview" title="总览"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span class="lbl">今日</span></button>
       <button class="nav-item" data-view="milestones" title="里程碑"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2.5 3.5L17 11H5"/></svg></span><span class="lbl">项目</span></button>
@@ -451,7 +453,7 @@
   </aside>
   <main class="main">
     <div class="wrap">
-    <div class="mobile-topbar"><span class="title">项目驾驶舱</span><span class="offline-pill" id="offlinePill">离线待同步</span><button class="btn ghost small" id="mobileSearchBtn">搜索</button><button class="btn ghost small" id="mobileSettingsBtn">设置</button></div>
+    <div class="mobile-topbar"><span class="title">循迹</span><span class="offline-pill" id="offlinePill">离线待同步</span><button class="btn ghost small" id="mobileSearchBtn">搜索</button><button class="btn ghost small" id="mobileSettingsBtn">设置</button></div>
 
   <!-- 总览 -->
   <section class="view active" id="view-overview">
@@ -759,7 +761,7 @@
 <!-- 登录遮罩 -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-card">
-    <div class="auth-brand"><div class="brand-mark">驾</div><div><div class="auth-title">个人项目驾驶舱</div><div class="auth-sub" id="authSub">登录查看你的项目与复盘</div></div></div>
+    <div class="auth-brand"><img class="brand-mark" src="./icon-192.png" alt=""><div><div class="auth-title">循迹</div><div class="auth-sub" id="authSub">个人项目手帐 · 登录查看项目与复盘</div></div></div>
     <div class="auth-error" id="authError"></div>
     <div class="field" id="authNameField" style="display:none"><label>姓名</label><input type="text" id="authName" placeholder="显示名"></div>
     <div class="field"><label>邮箱</label><input type="email" id="authEmail" placeholder="you@example.com" autocomplete="username"></div>
@@ -772,7 +774,7 @@
 </div>
 
 <button class="mobile-fab" id="mobileQuickAdd" aria-label="快速记录问题">＋</button>
-<footer>个人项目驾驶舱 · 项目 → 里程碑 → 节点 → 问题 → 复盘 · 附件跨设备保存</footer>
+<footer>循迹 · 项目 → 里程碑 → 节点 → 问题 → 复盘 · 附件跨设备保存</footer>
 
 <script>
 /* ======================================================================
@@ -1721,7 +1723,7 @@ function exportCalendar(){const items=[...state.nodes.filter(n=>n.status!=='已�
 function formatBytes(n){n=Number(n||0);if(n<1024)return n+' B';if(n<1048576)return(n/1024).toFixed(1)+' KB';if(n<1073741824)return(n/1048576).toFixed(1)+' MB';return(n/1073741824).toFixed(2)+' GB';}
 function renderSettings(){const list=document.getElementById('trashList');if(!list)return;const bytes=state.storage.attachmentBytes||0;storageInfo.textContent=`${state.storage.attachmentCount||0} 个附件 · ${formatBytes(bytes)}`;storageBar.style.width=Math.min(100,bytes/(400*1024*1024)*100)+'%';const archived=state.projects.filter(p=>projectStatus(p)==='已归档');archivedList.innerHTML=archived.length?archived.map(p=>`<div class="trash-row"><div class="main"><b>${esc(p.name)}</b><small>${esc(p.client)}</small></div><button class="btn ghost small" onclick="unarchiveProject(${p.id})">重新启用</button></div>`).join(''):'<div class="subtle" style="padding:12px 0">暂无归档项目</div>';const trash=state.trash.filter((x,idx,all)=>!x.trashGroup||all.findIndex(y=>y.trashGroup===x.trashGroup)===idx);list.innerHTML=trash.length?trash.slice().sort((a,b)=>b.deletedAt-a.deletedAt).map(x=>`<div class="trash-row"><div class="main"><b>${esc(x.name||x.title||x.content||entityLabel[x.table]||'记录')}</b><small>${entityLabel[x.table]||x.table} · ${new Date(x.deletedAt).toLocaleString('zh-CN')}</small></div><button class="btn ghost small" onclick="undoTrash('${x.table}',${x.id})">恢复</button><button class="btn ghost small danger" onclick="purgeTrash('${x.table}',${x.id})">彻底删除</button></div>`).join(''):'<div class="empty"><b>回收站是空的</b>删除的内容会先保留在这里。</div>';}
 async function unarchiveProject(id){const p=projectById(id);if(!p)return;p.status='进行中';try{if(APP.online)await API.patch('/projects/'+id,stripForSync('projects',p));renderAll();toast(APP.online?'项目已重新启用':'演示项目已重新启用');}catch(e){toast('操作失败：'+e.message);}}
-async function exportBackup(){try{const data=APP.online?await API.get('/backup'):{version:1,generatedAt:new Date().toISOString(),note:'演示模式数据，刷新后重置。',data:{projects:state.projects,milestones:state.milestones,nodes:state.nodes,issues:state.issues.map(({attaches,verifyShots,...i})=>i),reflections:state.reflections,weekly_reviews:state.weeklyReviews},attachments:[]};downloadText('项目驾驶舱备份_'+fmt(today)+'.json',JSON.stringify(data,null,2),'application/json;charset=utf-8');toast(APP.online?'完整数据已导出':'演示数据已导出');}catch(e){toast('导出失败：'+e.message);}}
+async function exportBackup(){try{const data=APP.online?await API.get('/backup'):{version:1,generatedAt:new Date().toISOString(),note:'演示模式数据，刷新后重置。',data:{projects:state.projects,milestones:state.milestones,nodes:state.nodes,issues:state.issues.map(({attaches,verifyShots,...i})=>i),reflections:state.reflections,weekly_reviews:state.weeklyReviews},attachments:[]};downloadText('循迹备份_'+fmt(today)+'.json',JSON.stringify(data,null,2),'application/json;charset=utf-8');toast(APP.online?'完整数据已导出':'演示数据已导出');}catch(e){toast('导出失败：'+e.message);}}
 async function importBackupFile(file){if(!file)return;if(!APP.online){toast('演示模式不导入备份，请登录正式账号后使用');return;}try{const data=JSON.parse(await file.text());if(!confirm('备份内容会作为副本合并，不覆盖现有数据。继续导入？'))return;const r=await API.post('/restore',data);await loadState();toast('备份已导入'+(r.warning?'，附件清单未重复上传':''));}catch(e){toast('导入失败：'+e.message);}}
 async function changePassword(){if(!APP.online){toast('演示模式没有账号密码');return;}try{await API.post('/account/password',{currentPassword:currentPassword.value,newPassword:newPassword.value});currentPassword.value='';newPassword.value='';toast('密码已修改');}catch(e){toast('修改失败：'+e.message);}}
 async function renewRecovery(){if(!APP.online){toast('演示模式没有账号恢复码');return;}try{const r=await API.post('/account/recovery',{currentPassword:currentPassword.value});showRecoveryCode(r.recoveryCode);currentPassword.value='';}catch(e){toast('生成失败：'+e.message);}}

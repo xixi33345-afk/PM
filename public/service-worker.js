@@ -1,5 +1,5 @@
-const CACHE = "personal-pm-shell-v4";
-const SHELL = ["/", "/index.html", "/manifest.json"];
+const CACHE = "xunji-shell-v5";
+const SHELL = ["/", "/index.html", "/manifest.json", "/favicon-32.png", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

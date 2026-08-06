@@ -1,11 +1,15 @@
 {
-  "name": "个人项目驾驶舱",
-  "short_name": "项目驾驶舱",
-  "description": "单人项目、问题、复盘与每周回顾",
+  "name": "循迹 · 个人项目手帐",
+  "short_name": "循迹",
+  "description": "个人项目、节点、问题、复盘与每周回顾",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#F7F7F4",
-  "theme_color": "#FFFDFC"
+  "background_color": "#FFFDFC",
+  "theme_color": "#FFFDFC",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
 }
