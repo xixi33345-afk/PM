@@ -7,3 +7,7 @@ compatibility_date = "2024-09-23"
 binding = "DB"
 database_name = "delivery-pm-db"
 database_id = "a38ada54-1be2-42c2-b1b1-f12f0d63667d"
+
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "delivery-pm-attachments"
