@@ -53,3 +53,5 @@ wrangler d1 execute delivery-pm-db --remote --file=./migrations/0003_personal_pr
 ## 本地预览
 
 直接打开 `public/index.html` 可使用演示模式。演示数据不会联网或持久化；完整调试需要 D1、R2 和 `AUTH_SECRET` 绑定。
+
+<!-- 触发 Cloudflare 重新部署 -->
