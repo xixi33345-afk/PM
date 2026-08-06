@@ -1,5 +1,6 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+const MAX_ATTACHMENT_BYTES = 1024 * 1024;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -165,36 +166,39 @@ async function getState(env) {
 }
 
 async function uploadAttachment(request, env) {
-  if (!env.ATTACHMENTS) return json({ error: "未绑定附件存储空间" }, 500);
   const form = await request.formData();
   const file = form.get("file"), issueId = Number(form.get("issueId"));
   const kind = form.get("kind") === "verify" ? "verify" : "attach";
   if (!file || typeof file.stream !== "function" || !issueId) return json({ error: "缺少附件或问题编号" }, 400);
-  if (file.size > 15 * 1024 * 1024) return json({ error: "单个附件不能超过 15MB" }, 400);
+  if (file.size > MAX_ATTACHMENT_BYTES) return json({ error: "单个附件不能超过 1MB，请压缩后重试" }, 400);
   const issue = await env.DB.prepare("SELECT id FROM issues WHERE id=?").bind(issueId).first();
   if (!issue) return json({ error: "关联的问题不存在" }, 404);
-  const key = `issues/${issueId}/${crypto.randomUUID()}`, contentType = file.type || "application/octet-stream";
-  await env.ATTACHMENTS.put(key, file.stream(), { httpMetadata: { contentType } });
-  const res = await env.DB.prepare("INSERT INTO attachments (issue_id,object_key,filename,content_type,kind,size,created_at) VALUES (?,?,?,?,?,?,?)")
-    .bind(issueId, key, file.name || "附件", contentType, kind, file.size || 0, Date.now()).run();
+  const key = `d1/${crypto.randomUUID()}`, contentType = file.type || "application/octet-stream";
+  const contentBase64 = b64url(await file.arrayBuffer());
+  let res;
+  try {
+    res = await env.DB.prepare("INSERT INTO attachments (issue_id,object_key,filename,content_type,kind,size,created_at,content_base64) VALUES (?,?,?,?,?,?,?,?)")
+      .bind(issueId, key, file.name || "附件", contentType, kind, file.size || 0, Date.now(), contentBase64).run();
+  } catch (error) {
+    const message = String(error?.message || error);
+    if (message.includes("content_base64")) return json({ error: "附件数据库尚未升级，请先执行 0004_d1_attachment_content.sql" }, 500);
+    throw error;
+  }
   return json({ id: res.meta.last_row_id, issueId, name: file.name || "附件", type: contentType, kind, size: file.size || 0, url: `/api/attachments/${res.meta.last_row_id}` });
 }
 async function downloadAttachment(id, env) {
-  if (!env.ATTACHMENTS) return json({ error: "未绑定附件存储空间" }, 500);
-  const row = await env.DB.prepare("SELECT object_key,filename,content_type FROM attachments WHERE id=?").bind(id).first();
+  const row = await env.DB.prepare("SELECT filename,content_type,content_base64 FROM attachments WHERE id=?").bind(id).first();
   if (!row) return json({ error: "附件不存在" }, 404);
-  const object = await env.ATTACHMENTS.get(row.object_key);
-  if (!object) return json({ error: "附件文件不存在" }, 404);
-  const headers = new Headers(); object.writeHttpMetadata(headers);
+  if (!row.content_base64) return json({ error: "附件内容不存在，请重新上传" }, 404);
+  const headers = new Headers();
   headers.set("content-type", row.content_type || "application/octet-stream");
   headers.set("content-disposition", `inline; filename*=UTF-8''${encodeURIComponent(row.filename)}`);
   headers.set("cache-control", "private, max-age=3600");
-  return new Response(object.body, { headers });
+  return new Response(b64urlToBytes(row.content_base64), { headers });
 }
 async function deleteAttachment(id, env) {
-  const row = await env.DB.prepare("SELECT object_key FROM attachments WHERE id=?").bind(id).first();
+  const row = await env.DB.prepare("SELECT id FROM attachments WHERE id=?").bind(id).first();
   if (!row) return json({ ok: true });
-  if (env.ATTACHMENTS) await env.ATTACHMENTS.delete(row.object_key);
   await env.DB.prepare("DELETE FROM attachments WHERE id=?").bind(id).run();
   return json({ ok: true });
 }
@@ -241,8 +245,6 @@ async function purgeEntity(table, id, env) {
   if (issueSql) {
     const { results } = await env.DB.prepare(issueSql).bind(group || id).all();
     for (const issue of results) {
-      const ats = await env.DB.prepare("SELECT id,object_key FROM attachments WHERE issue_id=?").bind(issue.id).all();
-      if (env.ATTACHMENTS) for (const a of ats.results) await env.ATTACHMENTS.delete(a.object_key);
       await env.DB.prepare("DELETE FROM attachments WHERE issue_id=?").bind(issue.id).run();
     }
   }

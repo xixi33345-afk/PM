@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS attachments (
   content_type TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'attach',
   size INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  content_base64 TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_ms_proj ON milestones(project_id);
