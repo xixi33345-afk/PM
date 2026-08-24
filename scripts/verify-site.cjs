@@ -13,6 +13,18 @@ const references = [...html.matchAll(/getElementById\(['"]([^'"]]+)['"]\)/g)].ma
 const missing = [...new Set(references.filter((id) => !known.has(id)))];
 if (missing.length) throw new Error('Missing ids: ' + missing.join(', '));
 
+for (const fragment of [
+  'function openNodeAdd(projectId=null,milestoneId=null,draft=null)',
+  'openNodeAdd(${m.projectId},${m.id})',
+  'pendingNodeAfterMilestone',
+  'id="weeklyAddMsBtn"',
+  'id="genAddNodeBtn"',
+  'value="milestone"',
+  '## 本周里程碑',
+]) {
+  if (!html.includes(fragment)) throw new Error(`Milestone/node workflow is missing: ${fragment}`);
+}
+
 JSON.parse(fs.readFileSync('public/manifest.json', 'utf8'));
 for (const file of ['public/service-worker.js', 'migrations/0003_personal_productivity_core.sql']) {
   if (!fs.existsSync(file)) throw new Error('Missing file: ' + file);
