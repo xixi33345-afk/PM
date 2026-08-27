@@ -203,11 +203,30 @@ async function deleteAttachment(id, env) {
   return json({ ok: true });
 }
 
-async function createEntity(table, obj, env) { return json(await insertEntity(table, obj, env)); }
+const validWeekStart = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+async function activeWeeklyReview(weekStart, env, excludeId = null) {
+  if (!validWeekStart(weekStart)) return null;
+  let sql = "SELECT id,data FROM weekly_reviews WHERE json_extract(data,'$.weekStart')=? AND json_extract(data,'$.deletedAt') IS NULL";
+  const args = [weekStart];
+  if (excludeId != null) { sql += " AND id<>?"; args.push(Number(excludeId)); }
+  return env.DB.prepare(sql + " ORDER BY id LIMIT 1").bind(...args).first();
+}
+async function createEntity(table, obj, env) {
+  if (table === "weekly_reviews") {
+    if (!validWeekStart(obj.weekStart)) return json({ error: "周回顾缺少有效的周起始日期" }, 400);
+    const existing = await activeWeeklyReview(obj.weekStart, env);
+    if (existing) return updateEntity(table, existing.id, obj, env);
+  }
+  return json(await insertEntity(table, obj, env));
+}
 async function updateEntity(table, id, obj, env) {
   const exists = await env.DB.prepare(`SELECT data FROM ${table} WHERE id=?`).bind(id).first();
   if (!exists) return json({ error: "记录不存在" }, 404);
   const old = JSON.parse(exists.data), data = { ...old, ...obj };
+  if (table === "weekly_reviews") {
+    if (!validWeekStart(data.weekStart)) return json({ error: "周回顾缺少有效的周起始日期" }, 400);
+    if (await activeWeeklyReview(data.weekStart, env, id)) return json({ error: "这一周已经存在另一份回顾" }, 409);
+  }
   delete data.id; delete data.attaches; delete data.verifyShots; delete data.deletedAt; delete data.trashGroup;
   const fks = ENTITY[table], sets = [...fks.map((c) => `${c}=?`), "data=?", "updated_at=?"];
   await env.DB.prepare(`UPDATE ${table} SET ${sets.join(",")} WHERE id=?`).bind(...fkValues(table, data), JSON.stringify(data), Date.now(), id).run();
@@ -230,6 +249,7 @@ async function restoreEntity(table, id, env) {
   const row = await env.DB.prepare(`SELECT data FROM ${table} WHERE id=?`).bind(id).first();
   if (!row) return json({ error: "回收站中没有这条记录" }, 404);
   const data = JSON.parse(row.data), group = data.trashGroup, now = Date.now();
+  if (table === "weekly_reviews" && await activeWeeklyReview(data.weekStart, env, id)) return json({ error: "这一周已有回顾，不能恢复重复记录" }, 409);
   if (group) {
     await env.DB.batch(Object.keys(ENTITY).map((t) => env.DB.prepare(`UPDATE ${t} SET data=json_remove(data,'$.deletedAt','$.trashGroup'),updated_at=? WHERE json_extract(data,'$.trashGroup')=?`).bind(now, group)));
   } else {
@@ -265,14 +285,21 @@ async function exportBackup(env) {
 async function importBackup(request, env) {
   const body = await request.json().catch(() => ({})), src = body.data || body;
   if (!src || !Array.isArray(src.projects) || !Array.isArray(src.issues)) return json({ error: "备份文件格式不正确" }, 400);
-  const pmap = {}, mmap = {}, imap = {};
+  const pmap = {}, mmap = {}, nmap = {}, imap = {};let imported = 0, skippedReviews = 0;
   for (const p of src.projects || []) { const n = await insertEntity("projects", { ...p, id: undefined, name: `${p.name || "未命名项目"}（恢复）` }, env); pmap[p.id] = n.id; }
   for (const m of src.milestones || []) { const n = await insertEntity("milestones", { ...m, id: undefined, projectId: pmap[m.projectId] }, env); mmap[m.id] = n.id; }
-  for (const n of src.nodes || []) await insertEntity("nodes", { ...n, id: undefined, projectId: pmap[n.projectId], milestoneId: mmap[n.milestoneId] }, env);
+  for (const n of src.nodes || []) { const restored = await insertEntity("nodes", { ...n, id: undefined, projectId: pmap[n.projectId], milestoneId: mmap[n.milestoneId] }, env); nmap[n.id] = restored.id; }
   for (const i of src.issues || []) { const n = await insertEntity("issues", { ...i, id: undefined, projectId: pmap[i.projectId] || null }, env); imap[i.id] = n.id; }
   for (const r of src.reflections || []) await insertEntity("reflections", { ...r, id: undefined, projectIds: (r.projectIds || []).map((x) => pmap[x]).filter(Boolean), issueIds: (r.issueIds || []).map((x) => imap[x]).filter(Boolean) }, env);
-  for (const w of src.weekly_reviews || []) await insertEntity("weekly_reviews", { ...w, id: undefined }, env);
-  return json({ ok: true, imported: Object.values(pmap).length + Object.values(imap).length, warning: "原备份中的附件清单不会重复上传。" });
+  const remapItem = (item) => ({ ...item, sourceProjectId: pmap[item.sourceProjectId] || null, sourceMilestoneId: mmap[item.sourceMilestoneId] || null, sourceNodeId: nmap[item.sourceNodeId] || null });
+  for (const w of src.weekly_reviews || []) {
+    if (!validWeekStart(w.weekStart) || await activeWeeklyReview(w.weekStart, env)) { skippedReviews++; continue; }
+    await insertEntity("weekly_reviews", { ...w, id: undefined, completedItems: Array.isArray(w.completedItems) ? w.completedItems.map(remapItem) : w.completedItems, nextItems: Array.isArray(w.nextItems) ? w.nextItems.map(remapItem) : w.nextItems, dismissedSourceNodeIds: (w.dismissedSourceNodeIds || []).map((x) => nmap[x]).filter(Boolean) }, env);
+    imported++;
+  }
+  imported += Object.values(pmap).length + Object.values(mmap).length + Object.values(nmap).length + Object.values(imap).length + (src.reflections || []).length;
+  const warning = `原备份中的附件清单不会重复上传。${skippedReviews ? ` 已跳过 ${skippedReviews} 份与现有周次重复的周回顾。` : ""}`;
+  return json({ ok: true, imported, skippedReviews, warning });
 }
 
 export async function onRequest(context) {
@@ -296,7 +323,10 @@ export async function onRequest(context) {
     if (head === "account" && seg[1] === "password" && method === "POST") return changePassword(request, user, env);
     if (head === "account" && seg[1] === "recovery" && method === "POST") return renewRecovery(request, user, env);
     if (head === "backup" && method === "GET") return exportBackup(env);
-    if (head === "restore" && method === "POST") return importBackup(request, env);
+    if (head === "restore" && method === "POST") {
+      if (!canWrite(user)) return json({ error: "无写入权限" }, 403);
+      return importBackup(request, env);
+    }
     if (head === "trash" && ENTITY[seg[1]] && seg[2]) {
       if (!canWrite(user)) return json({ error: "无写入权限" }, 403);
       if (method === "POST") return restoreEntity(seg[1], seg[2], env);
