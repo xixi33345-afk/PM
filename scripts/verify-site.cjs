@@ -31,9 +31,19 @@ for (const fragment of [
   'id="mmCompleted"',
   'id="nCompleted"',
   "completed=status==='已完成'?(nCompleted.value||fmt(today)):''",
-  "n.completed=status==='已完成'?(n.completed||fmt(today)):''",
+  'async function changeNodeStatus(id,status)',
+  'async function persistMissingCompletionDates()',
+  "Object.assign(n,await API.patch('/nodes/'+n.id,data))",
+  "Object.assign(savedMilestone,await API.patch('/milestones/'+editingId,data))",
+  "Promise.allSettled(updates.map(x=>API.patch('/'+x.table+'/'+x.item.id,x.data)))",
 ]) {
   if (!html.includes(fragment)) throw new Error(`Milestone/node workflow is missing: ${fragment}`);
+}
+for (const fakeCompletion of [
+  'short(n.completed||fmt(today))',
+  "n.completed=status==='已完成'?(n.completed||fmt(today)):''",
+]) {
+  if (html.includes(fakeCompletion)) throw new Error(`Completion dates must not be display-only defaults: ${fakeCompletion}`);
 }
 if (html.includes('## 本周里程碑')) throw new Error('Weekly review export must not contain an extra milestone section');
 

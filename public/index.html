@@ -1167,14 +1167,14 @@ function rangeDateLabels(sp,rng){
 }
 function gMilestoneRow(m,rng){
   const r=milestoneRisk(m),mp=progressOf(nodesOfMilestone(m.id)),sp=spanOf(m),visible=spanVisible(sp,rng),L=xPct(sp.start,rng),R=xPct(sp.end,rng,true),W=Math.max(R-L,rng.mode==='day'?100/rng.totalDays:1.5),open=state.expanded[m.id],nc=nodesOfMilestone(m.id).length;
-  const completed=milestoneIsDone(m)?(m.completed||fmt(today)):'';
+  const completed=milestoneIsDone(m)?(m.completed||''):'';
   const sub=completed?`完成${short(completed)}·${nc}节点`:`${m.owner?esc(m.owner):'—'}·${nc}节点`;
   const bar=visible?`<div class="g-bar g-bar-ms" data-risk="${r.level}" style="left:${L}%;width:${W}%" title="${esc(m.name)}　${short(fmt(sp.start))}~${short(fmt(sp.end))}　${r.label}${completed?'　实际完成 '+completed:''}"><span class="g-fill" style="width:${mp}%"></span><span class="g-diamond"></span><span class="g-pct">${mp}%</span>${rangeDateLabels(sp,rng)}</div>`:`<span class="g-offrange">${sp.end<rng.s?'早于当前 6 周':'晚于当前 6 周'} · ${short(fmt(sp.start))} → ${short(fmt(sp.end))}</span>`;
   return `<div class="g-row g-ms"><div class="g-label"><button class="g-toggle" onclick="toggleMs(${m.id})">${open?'▾':'▸'}</button><span class="ms-badge">关卡</span><span class="g-name" title="${m.deliverable?esc(m.deliverable):esc(m.name)}">${esc(m.name)}</span><span class="g-sub">${sub}</span><button class="icon-btn" style="width:24px;height:24px;font-size:12px" onclick="openNodeAdd(${m.projectId},${m.id})" title="在此里程碑添加节点" aria-label="在此里程碑添加节点">＋</button><button class="icon-btn" style="width:24px;height:24px;font-size:12px" onclick="openMsEdit(${m.id})" title="编辑">✎</button><button class="icon-btn" style="width:24px;height:24px;font-size:12px" onclick="delMs(${m.id})" title="删除">✕</button></div><div class="g-track" style="${gridBg(rng)}">${weekendBands(rng)}${todayLine(rng)}${bar}</div></div>`;
 }
 function gNodeRow(n,rng){
   const sp=spanOf(n),visible=spanVisible(sp,rng),L=xPct(sp.start,rng),R=xPct(sp.end,rng,true),W=Math.max(R-L,rng.mode==='day'?100/rng.totalDays:1.2),st=nodeBarStyle(n);
-  const completed=n.status==='已完成'?(n.completed||fmt(today)):'';
+  const completed=n.status==='已完成'?(n.completed||''):'';
   const bar=visible?`<div class="g-bar g-bar-node ${st.cls}" style="left:${L}%;width:${W}%" title="${esc(n.title)}　${short(fmt(sp.start))}~${short(fmt(sp.end))}　${n.status}${completed?'　实际完成 '+completed:''}"><span class="g-fill" style="width:${st.pct}%"></span><span class="g-nlabel">${short(fmt(sp.end))}</span>${rangeDateLabels(sp,rng)}</div>`:`<span class="g-offrange">${sp.end<rng.s?'早于当前 6 周':'晚于当前 6 周'} · ${short(fmt(sp.end))}</span>`;
   return `<div class="g-row g-node"><div class="g-label g-indent"><span class="g-name-sm">${esc(n.title)}</span><span class="g-sub">${esc(n.owner)}·${n.status}${completed?'·完成'+short(completed):''}</span></div><div class="g-track" style="${gridBg(rng)}">${weekendBands(rng)}${todayLine(rng)}${bar}</div></div>`;
 }
@@ -1226,7 +1226,11 @@ async function saveMs(){
   const data={projectId:+mmProject.value, name, start:mmStart.value, due:mmDue.value, owner:mmOwner.value.trim(), status, completed, deliverable:mmDeliverable.value.trim()};
   const editingId=state.editing;
   let savedMilestone;
-  if(editingId){ savedMilestone=milestoneById(editingId); Object.assign(savedMilestone,data); syncUpdate('milestones',savedMilestone); }
+  if(editingId){
+    savedMilestone=milestoneById(editingId);
+    if(APP.online){try{Object.assign(savedMilestone,await API.patch('/milestones/'+editingId,data));}catch(e){toast('保存失败：'+e.message);return;}}
+    else Object.assign(savedMilestone,data);
+  }
   else if(APP.online){ try{ savedMilestone=await apiCreate('milestones',data);state.milestones.push(savedMilestone); }catch(e){ toast('保存失败：'+e.message); return; } }
   else{savedMilestone={id:mid++,...data};state.milestones.push(savedMilestone);}
   const resume=!editingId?pendingNodeAfterMilestone:null;
@@ -1242,7 +1246,8 @@ function nodeRow(n,r,withControls){
   const p=projectById(n.projectId);
   const tCls=r.kind==='done'?'t done':'t';
   const controls=withControls?`<div class="controls"><select onchange="changeNodeStatus(${n.id},this.value)">${['未开始','进行中','已完成','阻塞'].map(s=>`<option ${s===n.status?'selected':''}>${s}</option>`).join('')}</select><button class="icon-btn" onclick="openNodeEdit(${n.id})">✎</button><button class="icon-btn" onclick="delNode(${n.id})">✕</button></div>`:'';
-  return `<div class="row-item" data-risk="${r.level}"><span class="chip ${r.kind}">${r.label}</span><div class="main"><div class="${tCls}">${esc(n.title)}</div><div class="meta"><span>${esc(n.owner)}</span><span class="mono">截止 ${short(n.due)}</span>${n.status==='已完成'?`<span class="mono">实际完成 ${short(n.completed||fmt(today))}</span>`:''}<span>${esc(p.client)} · ${esc(p.name)}</span><span>${n.status}</span>${n.note?`<span>📌 ${esc(n.note)}</span>`:''}</div></div>${controls}</div>`;
+  const completion=n.status==='已完成'?(n.completed?`<span class="mono">实际完成 ${short(n.completed)}</span>`:'<span class="danger">待补实际完成日期</span>'):'';
+  return `<div class="row-item" data-risk="${r.level}"><span class="chip ${r.kind}">${r.label}</span><div class="main"><div class="${tCls}">${esc(n.title)}</div><div class="meta"><span>${esc(n.owner)}</span><span class="mono">截止 ${short(n.due)}</span>${completion}<span>${esc(p.client)} · ${esc(p.name)}</span><span>${n.status}</span>${n.note?`<span>📌 ${esc(n.note)}</span>`:''}</div></div>${controls}</div>`;
 }
 function renderNodes(){
   const f=state.filter;
@@ -1614,7 +1619,11 @@ function exportReflectionsJson(){const rows=reflectionExportData();if(!rows.leng
 async function copyReflectionAi(){const text=buildReflectionMarkdown();if(!currentReflections().length){toast('当前筛选下没有复盘可复制');return;}try{await navigator.clipboard.writeText(text);toast('AI 分析包已复制');}catch{downloadText(`复盘_AI分析包_${fmt(today)}.md`,text,'text/markdown;charset=utf-8');toast('已改为下载 Markdown');}}
 
 // —— 节点交互 ——
-function changeNodeStatus(id,status){const n=state.nodes.find(x=>x.id===id);if(!n)return;n.status=status;n.completed=status==='已完成'?(n.completed||fmt(today)):'';syncUpdate('nodes',n);renderAll();}
+async function changeNodeStatus(id,status){
+  const n=state.nodes.find(x=>x.id===id);if(!n)return;const completed=status==='已完成'?(n.completed||fmt(today)):'',data={...stripForSync('nodes',n),status,completed};
+  if(APP.online){try{Object.assign(n,await API.patch('/nodes/'+id,data));}catch(e){toast('状态保存失败：'+e.message);renderAll();return;}}
+  else Object.assign(n,data);renderAll();
+}
 function delNode(id){if(confirm('将这个节点移入回收站？'))trashEntity('nodes',id,'节点');}
 function gotoProject(id){document.querySelector('.nav-item[data-view="milestones"]').click(); document.getElementById('msProject').value=id; renderMilestones();}
 function gotoIssuesByOwner(owner){
@@ -1676,7 +1685,11 @@ async function saveNode(){
   const data={projectId:+nProject.value,milestoneId:+nMilestone.value,title:nTitle.value.trim(),owner:nOwner.value.trim(),due:nDue.value,status,completed,note:nNote.value.trim()};
   if(!data.milestoneId){continueNodeAfterNewMilestone();return;}
   if(!data.title||!data.owner||!data.due){toast('请填写节点名称、负责人、截止日期');return;}
-  if(state.editing){ const n=state.nodes.find(x=>x.id===state.editing); Object.assign(n,data); syncUpdate('nodes',n); }
+  if(state.editing){
+    const n=state.nodes.find(x=>x.id===state.editing);
+    if(APP.online){try{Object.assign(n,await API.patch('/nodes/'+n.id,data));}catch(e){toast('保存失败：'+e.message);return;}}
+    else Object.assign(n,data);
+  }
   else if(APP.online){ try{ state.nodes.push(await apiCreate('nodes',data)); }catch(e){ toast('保存失败：'+e.message); return; } }
   else state.nodes.push({id:nid++,...data});
   closeOverlay('nodeOverlay'); renderAll(); toast('已保存节点');
@@ -2137,10 +2150,23 @@ function applyState(s){
   const reviewMap=new Map();(s.weekly_reviews||[]).forEach(w=>{const old=reviewMap.get(w.weekStart);if(!old||Number(w.updatedAt||w.id)>Number(old.updatedAt||old.id))reviewMap.set(w.weekStart,w);});
   state.reflections=s.reflections||[];state.weeklyReviews=[...reviewMap.values()];state.trash=s.trash||[];state.storage=s.storage||{attachmentCount:0,attachmentBytes:0};state.users=s.users||[];state.projects.forEach(p=>p.status=p.status||'进行中');
 }
+async function persistMissingCompletionDates(){
+  if(!APP.online||isViewerMode())return {filled:0,failed:0};const date=fmt(today),updates=[];
+  state.nodes.filter(n=>n.status==='已完成'&&!n.completed).forEach(n=>updates.push({table:'nodes',item:n,data:{...stripForSync('nodes',n),completed:date}}));
+  state.milestones.filter(m=>m.status==='已完成'&&!m.completed).forEach(m=>updates.push({table:'milestones',item:m,data:{...stripForSync('milestones',m),completed:date}}));
+  if(!updates.length)return {filled:0,failed:0};
+  const results=await Promise.allSettled(updates.map(x=>API.patch('/'+x.table+'/'+x.item.id,x.data)));let filled=0,failed=0;
+  results.forEach((result,index)=>{if(result.status==='fulfilled'){Object.assign(updates[index].item,result.value);filled++;}else failed++;});
+  return {filled,failed};
+}
 async function hydrateAttachmentImages(items){
   await Promise.all((items||[]).filter(a=>String(a.type||'').startsWith('image/')).map(async a=>{try{const res=await fetch(a.url,{headers:{Authorization:'Bearer '+APP.token}});if(res.ok)a.dataUrl=URL.createObjectURL(await res.blob());}catch{}}));
 }
-async function loadState(){const s=await API.get('/state');lsSet('pm_cached_state',JSON.stringify(s));await hydrateAttachmentImages(s.attachments);applyState(s);renderAll();}
+async function loadState(){
+  const s=await API.get('/state');await hydrateAttachmentImages(s.attachments);applyState(s);let backfill={filled:0,failed:0};
+  try{backfill=await persistMissingCompletionDates();}catch(e){toast('实际完成日期自动补全失败：'+e.message);}
+  lsSet('pm_cached_state',JSON.stringify({...s,nodes:state.nodes,milestones:state.milestones}));renderAll();if(backfill.filled)toast(`已自动补全 ${backfill.filled} 条实际完成日期`);if(backfill.failed)toast(`${backfill.failed} 条实际完成日期保存失败，请刷新后重试`);
+}
 function authErr(msg){ const e=document.getElementById('authError'); e.textContent=msg||''; e.classList.toggle('show',!!msg); }
 function showAuth(mode){
   authMode=mode; const su=mode==='signup';
