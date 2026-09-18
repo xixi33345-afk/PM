@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   salt          TEXT NOT NULL,
   name          TEXT,
+  default_owner TEXT NOT NULL DEFAULT '',
   role          TEXT NOT NULL DEFAULT 'member',
   recovery_hash TEXT,
   recovery_salt TEXT,
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS milestones (
 CREATE TABLE IF NOT EXISTS nodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id INTEGER NOT NULL,
-  milestone_id INTEGER NOT NULL,
+  milestone_id INTEGER,
   data TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );

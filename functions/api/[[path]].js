@@ -75,7 +75,7 @@ const ENTITY = {
   weekly_reviews: [],
 };
 function fkValues(table, obj) {
-  const map = { project_id: obj.projectId, milestone_id: obj.milestoneId };
+  const map = { project_id: obj.projectId, milestone_id: obj.milestoneId ?? null };
   return ENTITY[table].map((c) => map[c]);
 }
 function parseRow(row) {
@@ -83,6 +83,7 @@ function parseRow(row) {
 }
 async function insertEntity(table, obj, env) {
   const data = { ...obj };
+  if (table === "nodes") await validateNodeParent(data, env);
   delete data.id;
   delete data.attaches;
   delete data.verifyShots;
@@ -94,13 +95,45 @@ async function insertEntity(table, obj, env) {
   return { id: res.meta.last_row_id, ...data };
 }
 
+async function validateNodeParent(data, env) {
+  const invalid = (message) => { throw Object.assign(new Error(message), { status: 400 }); };
+  data.projectId = Number(data.projectId);
+  if (!Number.isSafeInteger(data.projectId) || data.projectId <= 0) invalid("请选择节点所属项目");
+  const project = await env.DB.prepare("SELECT data FROM projects WHERE id=?").bind(data.projectId).first();
+  if (!project || JSON.parse(project.data).deletedAt) invalid("节点所属项目不存在或已删除");
+  if (data.milestoneId == null || data.milestoneId === "" || data.milestoneId === 0) {
+    data.milestoneId = null;
+    return;
+  }
+  data.milestoneId = Number(data.milestoneId);
+  if (!Number.isSafeInteger(data.milestoneId) || data.milestoneId <= 0) invalid("里程碑无效");
+  const milestone = await env.DB.prepare("SELECT project_id,data FROM milestones WHERE id=?").bind(data.milestoneId).first();
+  if (!milestone || JSON.parse(milestone.data).deletedAt || Number(milestone.project_id) !== data.projectId) invalid("里程碑必须属于节点所在项目");
+}
+
+function publicUser(row) {
+  return { id: row.id, name: row.name, email: row.email, role: row.role, defaultOwner: row.default_owner || row.name || "" };
+}
+async function getProfile(user, env) {
+  const row = await env.DB.prepare("SELECT * FROM users WHERE id=?").bind(user.id).first();
+  return row ? json({ user: publicUser(row) }) : json({ error: "账号不存在" }, 401);
+}
+async function saveProfile(request, user, env) {
+  if (!canWrite(user)) return json({ error: "无写入权限" }, 403);
+  const body = await request.json();
+  const defaultOwner = String(body.defaultOwner || "").trim();
+  if (!defaultOwner || defaultOwner.length > 80) return json({ error: "请填写 1 至 80 字的默认负责人" }, 400);
+  await env.DB.prepare("UPDATE users SET default_owner=? WHERE id=?").bind(defaultOwner, user.id).run();
+  return getProfile(user, env);
+}
+
 async function login(request, env) {
   if (!env.AUTH_SECRET) return json({ error: "服务端尚未设置登录密钥" }, 500);
   const { email, password } = await request.json().catch(() => ({}));
   if (!email || !password) return json({ error: "缺少邮箱或密码" }, 400);
   const row = await env.DB.prepare("SELECT * FROM users WHERE email=?").bind(String(email).toLowerCase()).first();
   if (!row || await hashPassword(password, row.salt) !== row.password_hash) return json({ error: "邮箱或密码错误" }, 401);
-  const user = { id: row.id, name: row.name, email: row.email, role: row.role };
+  const user = publicUser(row);
   const token = await signToken({ uid: row.id, role: row.role, name: row.name, email: row.email, exp: Date.now() + 7 * 864e5 }, env.AUTH_SECRET);
   return json({ token, user });
 }
@@ -117,7 +150,7 @@ async function signup(request, env) {
   const nm = name || mail.split("@")[0];
   const res = await env.DB.prepare("INSERT INTO users (email,password_hash,salt,name,role,recovery_hash,recovery_salt,created_at) VALUES (?,?,?,?,?,?,?,?)")
     .bind(mail, ph, salt, nm, "admin", rh, recSalt, Date.now()).run();
-  const user = { id: res.meta.last_row_id, name: nm, email: mail, role: "admin" };
+  const user = { id: res.meta.last_row_id, name: nm, email: mail, role: "admin", defaultOwner: nm };
   const token = await signToken({ uid: user.id, role: user.role, name: user.name, email: user.email, exp: Date.now() + 7 * 864e5 }, env.AUTH_SECRET);
   return json({ token, user, recoveryCode: code });
 }
@@ -223,6 +256,7 @@ async function updateEntity(table, id, obj, env) {
   const exists = await env.DB.prepare(`SELECT data FROM ${table} WHERE id=?`).bind(id).first();
   if (!exists) return json({ error: "记录不存在" }, 404);
   const old = JSON.parse(exists.data), data = { ...old, ...obj };
+  if (table === "nodes") await validateNodeParent(data, env);
   if (table === "weekly_reviews") {
     if (!validWeekStart(data.weekStart)) return json({ error: "周回顾缺少有效的周起始日期" }, 400);
     if (await activeWeeklyReview(data.weekStart, env, id)) return json({ error: "这一周已经存在另一份回顾" }, 409);
@@ -288,9 +322,9 @@ async function importBackup(request, env) {
   const pmap = {}, mmap = {}, nmap = {}, imap = {};let imported = 0, skippedReviews = 0;
   for (const p of src.projects || []) { const n = await insertEntity("projects", { ...p, id: undefined, name: `${p.name || "未命名项目"}（恢复）` }, env); pmap[p.id] = n.id; }
   for (const m of src.milestones || []) { const n = await insertEntity("milestones", { ...m, id: undefined, projectId: pmap[m.projectId] }, env); mmap[m.id] = n.id; }
-  for (const n of src.nodes || []) { const restored = await insertEntity("nodes", { ...n, id: undefined, projectId: pmap[n.projectId], milestoneId: mmap[n.milestoneId] }, env); nmap[n.id] = restored.id; }
+  for (const n of src.nodes || []) { const restored = await insertEntity("nodes", { ...n, id: undefined, projectId: pmap[n.projectId], milestoneId: mmap[n.milestoneId] || null }, env); nmap[n.id] = restored.id; }
   for (const i of src.issues || []) { const n = await insertEntity("issues", { ...i, id: undefined, projectId: pmap[i.projectId] || null }, env); imap[i.id] = n.id; }
-  for (const r of src.reflections || []) await insertEntity("reflections", { ...r, id: undefined, projectIds: (r.projectIds || []).map((x) => pmap[x]).filter(Boolean), issueIds: (r.issueIds || []).map((x) => imap[x]).filter(Boolean) }, env);
+  for (const r of src.reflections || []) await insertEntity("reflections", { ...r, id: undefined, projectIds: (r.projectIds || []).map((x) => pmap[x]).filter(Boolean), issueIds: (r.issueIds || []).map((x) => imap[x]).filter(Boolean), nodeIds: (r.nodeIds || []).map((x) => nmap[x]).filter(Boolean) }, env);
   const remapItem = (item) => ({ ...item, sourceProjectId: pmap[item.sourceProjectId] || null, sourceMilestoneId: mmap[item.sourceMilestoneId] || null, sourceNodeId: nmap[item.sourceNodeId] || null });
   for (const w of src.weekly_reviews || []) {
     if (!validWeekStart(w.weekStart) || await activeWeeklyReview(w.weekStart, env)) { skippedReviews++; continue; }
@@ -318,14 +352,15 @@ export async function onRequest(context) {
     }
     const user = await authUser(request, env);
     if (!user) return json({ error: "未登录或登录已过期" }, 401);
-    if (head === "me" && method === "GET") return json({ user });
+    if (head === "me" && method === "GET") return getProfile(user, env);
+    if (head === "account" && seg[1] === "profile" && method === "PATCH") return await saveProfile(request, user, env);
     if (head === "state" && method === "GET") return getState(env);
     if (head === "account" && seg[1] === "password" && method === "POST") return changePassword(request, user, env);
     if (head === "account" && seg[1] === "recovery" && method === "POST") return renewRecovery(request, user, env);
     if (head === "backup" && method === "GET") return exportBackup(env);
     if (head === "restore" && method === "POST") {
       if (!canWrite(user)) return json({ error: "无写入权限" }, 403);
-      return importBackup(request, env);
+      return await importBackup(request, env);
     }
     if (head === "trash" && ENTITY[seg[1]] && seg[2]) {
       if (!canWrite(user)) return json({ error: "无写入权限" }, 403);
@@ -345,13 +380,13 @@ export async function onRequest(context) {
         return json(results.map(parseRow));
       }
       if (!canWrite(user)) return json({ error: "无写入权限" }, 403);
-      if (method === "POST" && seg.length === 1) return createEntity(head, await request.json(), env);
-      if (method === "PATCH" && seg.length === 2) return updateEntity(head, seg[1], await request.json(), env);
+      if (method === "POST" && seg.length === 1) return await createEntity(head, await request.json(), env);
+      if (method === "PATCH" && seg.length === 2) return await updateEntity(head, seg[1], await request.json(), env);
       if (method === "DELETE" && seg.length === 2) return softDeleteEntity(head, seg[1], env);
       return json({ error: "不支持的操作" }, 405);
     }
     return json({ error: "接口不存在" }, 404);
   } catch (e) {
-    return json({ error: "服务端错误：" + (e && e.message ? e.message : String(e)) }, 500);
+    return json({ error: (e.status === 400 ? "" : "服务端错误：") + (e && e.message ? e.message : String(e)) }, e.status === 400 ? 400 : 500);
   }
 }

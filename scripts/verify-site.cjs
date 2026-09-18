@@ -9,7 +9,7 @@ const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
 if (duplicateIds.length) throw new Error('Duplicate ids: ' + [...new Set(duplicateIds)].join(', '));
 
 const known = new Set(ids);
-const references = [...html.matchAll(/getElementById\(['"]([^'"]]+)['"]\)/g)].map((m) => m[1]);
+const references = [...html.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]);
 const missing = [...new Set(references.filter((id) => !known.has(id)))];
 if (missing.length) throw new Error('Missing ids: ' + missing.join(', '));
 
